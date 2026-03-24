@@ -1,0 +1,56 @@
+html {
+  scroll-behavior: smooth;
+}
+
+body{
+background: #D3D3D3;
+background-size: cover;
+background-position: bottom;
+background-attachment: fixed;
+background-repeat: no-repeat;
+overflow-x: hidden;
+}
+
+h1{
+font-family: Times New Roman;
+font-weight: bold;
+}
+
+h2{
+font-family: Times New Roman;
+font-weight: bold;
+}
+
+h3{
+font-family: Times New Roman;
+font-weight: bold;
+}
+
+h4{
+font-family: Times New Roman;
+font-weight: bold;
+}
+
+p{
+font-family: Helvetica;
+}
+
+li{
+font-family: Helvetica;
+}
+
+a{
+text-decoration: none;
+}
+
+.spoiler{ 
+  color: #E5E5E5; 
+  background-color:#E5E5E5;
+}
+
+.spoiler:hover{
+  color: black;
+}
+
+
+
