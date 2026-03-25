@@ -16,16 +16,7 @@
 			<img src="images/tbesarabs_022026.JPG" class="rounded img-fluid">
 			<div class="card-body">
 				<h5 class="card-title">Hello!</h5>
-				<p class="card-text"><a href="https://youtu.be/B9RgougnhiE?t=10" target="_blank">My name is Timur, but you can call me Tim</a>. I am also known as: wowemain, (Prosecutor) Dzhemvrot (from Russian Джем-в-рот — Jam-in-mouth) or lomabol (Моностырь). Currently I am 
-				<script>  
-					var dob = new Date("06/30/2007");   
-					var month_diff = Date.now() - dob.getTime();  
-					var age_dt = new Date(month_diff);   
-					var year = age_dt.getUTCFullYear();  
-					var age = Math.abs(year - 1970);  
-					document.write(age);  
-				</script>  
-				years old. I come from the beautiful country of Latvia. <img src="images/latvia_flag.png" width="20" height="10" alt=""> <br>I speak Russian (ru-n), English (en-b2), Latvian (lv-b1) and a bit of Ukrainian (uk-a1). I'm also trying to learn German, but it's going hard for me.</p>
+				<p class="card-text"><a href="https://youtu.be/B9RgougnhiE?t=10" target="_blank">My name is <b>Timurs</b>, but you can call me Tim</a>. <br>I am also known as: <b>wowemain</b>, (Prosecutor) <b>Dzhemvrot</b> (from Russian <i>Джемврот</i> — Jaminmouth) or <b>lomabol</b> (Моностырь). <br>I come from the beautiful country of <b>Latvia</b>. <img src="images/latvia_flag.png" width="20" height="10" alt=""><br><span id="AgeCounter"></span></p>
 				<!-- VISIBLE ONLY TO MOBILE USERS --!>
 				<div class="d-lg-none"><hr>
 				<h5 class="card-title">Links to some of my places</h5>
@@ -175,9 +166,17 @@
 				</div>
 			  </p>
 			</div>
+		  </div><br>
+		  <div class="card">
+			<div class="card-body">
+			  <h5 class="card-title">Countdowns</h5>
+			  <p class="card-text" id="summerCountdown"></p>
+			  <p class="card-text" id="BDayCountdown"></p>
+			</div>
 		  </div>
 		</div>
 	</div>
+	<script src="script.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
 	</body>
 </html>
