@@ -16,7 +16,7 @@ function daysUntilSummer() {
     const diffTime = summerStart - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    return `Hold on, people! The summer is near, only ${diffDays} more days!`;
+    return `Hold on, people! The summer is near, only <b>${diffDays}</b> more days!`;
 }
 
 function daysUntilBDay() {
@@ -36,7 +36,7 @@ function daysUntilBDay() {
     const diffTime = BDay - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    return `My birthday is in ${diffDays} days ;)`;
+    return `My birthday is in <b>${diffDays}</b> days ;)`;
 }
 
 function currentAge() {
@@ -56,6 +56,8 @@ function currentAge() {
 	return returntext;
 }
 
-document.getElementById("summerCountdown").textContent = daysUntilSummer();
-document.getElementById("BDayCountdown").textContent = daysUntilBDay();
+document.getElementById("summerCountdown").innerHTML = daysUntilSummer();
+document.getElementById("BDayCountdown").innerHTML = daysUntilBDay();
+document.getElementById("summerCountdownMobile").innerHTML = daysUntilSummer();
+document.getElementById("BDayCountdownMobile").innerHTML = daysUntilBDay();
 document.getElementById("AgeCounter").innerHTML = currentAge();
