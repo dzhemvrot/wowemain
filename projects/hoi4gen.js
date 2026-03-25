@@ -19,10 +19,18 @@ const COUNTRY_TAG_POOL = ["AET", "ZOR", "LUM", "VOR", "KAL", "SYN", "NEX", "PHO"
 // ====================== TAB SYSTEM ======================
 function switchTab(tab) {
     currentTab = tab;
-    document.getElementById('tab-0').classList.toggle('tab-active', tab === 0);
-    document.getElementById('tab-1').classList.toggle('tab-active', tab === 1);
+
+    // Deactivate all tabs
+    for (let i = 0; i <= 3; i++) {
+        const tabEl = document.getElementById('tab-' + i);
+        if (tabEl) tabEl.classList.toggle('tab-active', i === tab);
+    }
+
+    // Show only the selected panel
     document.getElementById('panel-0').classList.toggle('hidden', tab !== 0);
     document.getElementById('panel-1').classList.toggle('hidden', tab !== 1);
+    document.getElementById('panel-2').classList.toggle('hidden', tab !== 2);
+    document.getElementById('panel-3').classList.toggle('hidden', tab !== 3);
 }
 
 // ====================== PARTY POPULARITY ======================
@@ -63,7 +71,7 @@ function normalizeParties() {
     setPartyValues(vals);
 }
 
-// ====================== COUNTRY GENERATOR v2.6 ======================
+// ====================== COUNTRY GENERATOR ======================
 function generateCountry() {
     const tag = (document.getElementById('country-tag')?.value || 'NEW').toUpperCase().trim();
     if (tag.length !== 3 || !/^[A-Z]{3}$/.test(tag)) return;
@@ -216,7 +224,7 @@ function randomizeCountry() {
     generateCountry();
 }
 
-// ====================== FULL RENDER COUNTRY FORM (v2.6) ======================
+// ====================== RENDER COUNTRY FORM ======================
 function renderCountryForm() {
     const container = document.getElementById('country-form');
     container.innerHTML = `
@@ -551,19 +559,9 @@ function generateNews() {
     lastNewsData = { id, title, desc, picture, triggerTag, options: [...newsOptions], code: eventCode };
 }
 
-// ====================== CHARACTER GENERATOR v2.7 ======================
+// ====================== CHARACTER GENERATOR ======================
 
 let lastCharacterData = null;
-
-function switchTab(tab) {
-    currentTab = tab;
-    document.getElementById('tab-0').classList.toggle('tab-active', tab === 0);
-    document.getElementById('tab-1').classList.toggle('tab-active', tab === 1);
-    document.getElementById('tab-2').classList.toggle('tab-active', tab === 2);
-    document.getElementById('panel-0').classList.toggle('hidden', tab !== 0);
-    document.getElementById('panel-1').classList.toggle('hidden', tab !== 1);
-    document.getElementById('panel-2').classList.toggle('hidden', tab !== 2);
-}
 
 function renderCharacterForm() {
     const container = document.getElementById('character-form');
@@ -790,6 +788,159 @@ function generateCharacter() {
     lastCharacterData = { id, tag, code: charCode, loc: locSnippet };
 }
 
+// ====================== NATIONAL FOCUS GENERATOR v2.8 ======================
+
+let lastFocusData = null;
+
+function renderFocusForm() {
+    const container = document.getElementById('focus-form');
+    container.innerHTML = `
+        <div class="space-y-8">
+
+            <!-- Basic Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="input-label block mb-1">FOCUS TREE ID (e.g. NEW_focus_tree)</label>
+                    <input id="focus-tree-id" type="text" value="NEW_focus_tree" 
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateFocus()">
+                </div>
+                <div>
+                    <label class="input-label block mb-1">COUNTRY TAG</label>
+                    <input id="focus-tag" type="text" value="NEW" maxlength="3"
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateFocus()">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="input-label block mb-1">FOCUS ID</label>
+                    <input id="focus-id" type="text" value="NEW_industrial_effort" 
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateFocus()">
+                </div>
+                <div>
+                    <label class="input-label block mb-1">ICON</label>
+                    <input id="focus-icon" type="text" value="GFX_goal_generic_production" 
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateFocus()">
+                </div>
+                <div>
+                    <label class="input-label block mb-1">COST (days)</label>
+                    <input id="focus-cost" type="number" value="70" min="1" 
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateFocus()">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="input-label block mb-1">X POSITION</label>
+                    <input id="focus-x" type="number" value="0" 
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateFocus()">
+                </div>
+                <div>
+                    <label class="input-label block mb-1">Y POSITION</label>
+                    <input id="focus-y" type="number" value="0" 
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateFocus()">
+                </div>
+            </div>
+
+            <div>
+                <label class="input-label block mb-1">PREREQUISITE (optional)</label>
+                <input id="focus-prereq" type="text" value="" placeholder="e.g. NEW_previous_focus"
+                       class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateFocus()">
+            </div>
+
+            <div>
+                <label class="input-label block mb-2">COMPLETION REWARD (one command per line)</label>
+                <textarea id="focus-effects" rows="10" class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-sm font-mono">add_ideas = civilian_economy
+add_political_power = 50
+add_stability = 0.05</textarea>
+            </div>
+
+            <div class="flex gap-4">
+                <button onclick="generateFocus()" 
+                        class="flex-1 py-5 bg-[#c8102e] hover:bg-[#a00d24] text-2xl font-bold tracking-widest transition-all">
+                    GENERATE FOCUS TREE →
+                </button>
+                <button onclick="randomizeFocus()" 
+                        class="px-8 py-5 bg-[#00ff9d] hover:bg-[#00cc7a] text-black text-2xl font-bold tracking-widest transition-all">
+                    🎲 RANDOM
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function liveUpdateFocus() {
+    clearTimeout(liveTimeout);
+    liveTimeout = setTimeout(generateFocus, 10);
+}
+
+function generateFocus() {
+    const treeId = document.getElementById('focus-tree-id').value.trim() || 'NEW_focus_tree';
+    const tag = (document.getElementById('focus-tag').value || 'NEW').toUpperCase().trim();
+    const id = document.getElementById('focus-id').value.trim() || 'NEW_industrial_effort';
+    const icon = document.getElementById('focus-icon').value.trim() || 'GFX_goal_generic_production';
+    const x = parseInt(document.getElementById('focus-x').value) || 0;
+    const y = parseInt(document.getElementById('focus-y').value) || 0;
+    const cost = parseInt(document.getElementById('focus-cost').value) || 70;
+    const prereq = document.getElementById('focus-prereq').value.trim();
+
+    const effectsLines = document.getElementById('focus-effects').value.trim().split('\n');
+
+    let code = `focus_tree = {\n`;
+    code += `    id = ${treeId}\n\n`;
+    code += `    country = {\n        factor = 1\n        modifier = { add = 10 tag = ${tag} }\n    }\n\n`;
+    code += `    focus = {\n`;
+    code += `        id = ${id}\n`;
+    code += `        icon = ${icon}\n\n`;
+    code += `        x = ${x}\n`;
+    code += `        y = ${y}\n\n`;
+    code += `        cost = ${cost}\n\n`;
+
+    if (prereq) {
+        code += `        prerequisite = { focus = ${prereq} }\n\n`;
+    }
+
+    code += `        completion_reward = {\n`;
+    effectsLines.forEach(line => {
+        if (line.trim()) code += `            ${line.trim()}\n`;
+    });
+    code += `        }\n`;
+    code += `    }\n`;
+    code += `}`;
+
+    const preview = `# common/national_focus/${tag}_focuses.txt\n\n${code}\n\n` +
+                    `# Localisation (add to english/${tag}_l_english.yml):\n` +
+                    `l_english:\n` +
+                    ` ${id}:0 "Industrial Effort"\n` +
+                    ` ${id}_desc:0 "Strengthen our industrial base."\n\n` +
+                    `Remember: Create portrait GFX if needed and assign the tree in your country history file with:\n` +
+                    `    set_focus_tree = ${treeId}`;
+
+    document.getElementById('focus-preview').textContent = preview;
+    document.getElementById('focus-filename').textContent = `${tag}_focuses.txt`;
+
+    lastFocusData = { id: treeId, tag, code };
+}
+
+function randomizeFocus() {
+    const ideas = ["industrial_effort", "military_buildup", "political_reform", "naval_expansion", "air_superiority", "research_investment"];
+    const randomId = "NEW_" + ideas[Math.floor(Math.random()*ideas.length)] + "_" + Math.floor(Math.random()*99);
+    
+    document.getElementById('focus-id').value = randomId;
+    document.getElementById('focus-id').value = randomId;
+    document.getElementById('focus-icon').value = ["GFX_goal_generic_production", "GFX_goal_generic_army", "GFX_goal_generic_navy", "GFX_goal_generic_air", "GFX_goal_generic_construction"][Math.floor(Math.random()*5)];
+    document.getElementById('focus-x').value = Math.floor(Math.random()*10) - 3;
+    document.getElementById('focus-y').value = Math.floor(Math.random()*8);
+    document.getElementById('focus-cost').value = [35, 50, 70, 90, 120][Math.floor(Math.random()*5)];
+    document.getElementById('focus-prereq').value = Math.random() > 0.5 ? "NEW_previous_focus" : "";
+
+    document.getElementById('focus-effects').value = `add_ideas = { ${["civilian_economy","war_economy","partial_economic_mobilisation"][Math.floor(Math.random()*3)]} }\nadd_political_power = ${30 + Math.floor(Math.random()*70)}\nadd_stability = 0.0${10 + Math.floor(Math.random()*5)}`;
+    
+    document.getElementById('focus-reward').value = `add_tech_bonus = {\n    name = ${randomId}\n    bonus = 1\n    uses = 1\n    technology = ${["construction_2","infantry_weapons_2","electronic_mechanical_engineering"][Math.floor(Math.random()*3)]}\n}`;
+
+    generateFocus();
+}
+
 // ====================== EXPORT FUNCTIONS ======================
 function exportCountryFiles() {
     if (!lastCountryData) { alert("Please generate a country first!"); return; }
@@ -817,6 +968,14 @@ function exportCharacterFile() {
     }
     const content = lastCharacterData.code + "\n\n# Localisation snippet:\n" + lastCharacterData.loc;
     downloadFile(content, `${lastCharacterData.tag}_character_${lastCharacterData.id}.txt`, 'text/plain');
+}
+
+function exportFocusFile() {
+    if (!lastFocusData) {
+        alert("Generate a national focus first!");
+        return;
+    }
+    downloadFile(lastFocusData.code, `${lastFocusData.tag}_focus_${lastFocusData.id}.txt`, 'text/plain');
 }
 
 function downloadFile(content, filename, mimeType = 'text/plain') {
@@ -850,13 +1009,15 @@ window.onload = function() {
     renderCountryForm();
     renderNewsForm();
     renderNewsOptions();
-    renderCharacterForm();   // <-- new
+    renderCharacterForm();
+    renderFocusForm();          
 
     setTimeout(() => {
         normalizeParties();
         generateCountry();
         generateNews();
-        generateCharacter(); // initial preview
-        console.log('%c✅ HOI4 Generator v2.7 - Character tab added!', 'color:#00ff9d; font-size:16px');
+        generateCharacter();
+        generateFocus();            
+        console.log('%cHOI4 Generator v2.8 - National Focus tab added!', 'color:#00ff9d; font-size:16px');
     }, 100);
 };
