@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta content="HOI4 dzhemvrot's generator" property="og:title" />
-	<meta content="dzhemvrot's generator made for Hearts of Iron IV. Currently it's able to export country and event files." property="og:description" />
+	<meta content="dzhemvrot's generator made for Hearts of Iron IV. Currently it's able to export country, character and event files." property="og:description" />
 	<meta content="https://wowe-main.eu/projects/hoi4_generator" property="og:url" />
 	<meta content="#841414" data-react-helmet="true" name="theme-color" />
     <title>HOI4 dzhemvrot's generator</title>
@@ -22,7 +22,7 @@
                     <p class="text-[#c8102e] text-xl -mt-2 tracking-[4px]">dzhemvrot's generator</p>
                 </div>
                 <div class="ml-4 text-xs bg-black px-3 py-1 border border-[#00ff9d] rounded font-mono text-[#00ff9d]">
-                    v2.6
+                    v2.7
                 </div>
             </div>
 				
@@ -52,14 +52,17 @@
         </div>
 
         <!-- Tabs -->
-        <div class="flex border-b border-[#c8102e] mb-8">
-            <button onclick="switchTab(0)" id="tab-0" class="tab-active px-8 py-4 text-lg font-bold flex-1 md:flex-none text-center transition-all">
-                🇱🇻 COUNTRY GENERATOR
-            </button>
-            <button onclick="switchTab(1)" id="tab-1" class="px-8 py-4 text-lg font-bold flex-1 md:flex-none text-center transition-all">
-                📰 NEWS EVENT GENERATOR
-            </button>
-        </div>
+		<div class="flex border-b border-[#c8102e] mb-8">
+			<button onclick="switchTab(0)" id="tab-0" class="tab-active px-8 py-4 text-lg font-bold flex-1 md:flex-none text-center transition-all">
+				🇱🇻 COUNTRY GENERATOR
+			</button>
+			<button onclick="switchTab(1)" id="tab-1" class="px-8 py-4 text-lg font-bold flex-1 md:flex-none text-center transition-all">
+				📰 NEWS EVENT GENERATOR
+			</button>
+			<button onclick="switchTab(2)" id="tab-2" class="px-8 py-4 text-lg font-bold flex-1 md:flex-none text-center transition-all">
+				🧑‍ CHARACTER GENERATOR
+			</button>
+		</div>
 
         <!-- COUNTRY TAB -->
         <div id="panel-0">
@@ -126,11 +129,44 @@
                 </div>
             </div>
         </div>
+		
+		<!-- NEW CHARACTER TAB -->
+		<div id="panel-2" class="hidden">
+			<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+				<div class="lg:col-span-5 hoi4-panel p-8 rounded-none">
+					<h2 class="text-2xl font-bold mb-6 flex items-center gap-x-3">
+						<span class="text-[#c8102e]">CREATE NEW CHARACTER</span>
+					</h2>
+					
+					<div class="space-y-6" id="character-form">
+						<!-- Populated by JS -->
+					</div>
+				</div>
+
+				<div class="lg:col-span-7">
+					<div class="flex justify-between items-baseline mb-3 px-2">
+						<h3 class="uppercase text-[#00ff9d] tracking-widest text-sm font-bold">Generated Character Preview <span class="text-[10px] font-normal text-gray-400">(live updates)</span></h3>
+						<div class="flex gap-x-2">
+							<button onclick="copyToClipboard('character-preview')" 
+									class="px-4 py-1 text-xs bg-black border border-[#00ff9d] hover:bg-[#00ff9d] hover:text-black font-mono">COPY</button>
+							<button onclick="exportCharacterFile()" 
+									class="px-4 py-1 text-xs bg-[#c8102e] hover:bg-white hover:text-[#c8102e] font-mono">DOWNLOAD .TXT</button>
+						</div>
+					</div>
+					<pre id="character-preview" class="preview-box p-6 min-h-[460px] text-sm rounded-none overflow-auto"></pre>
+					
+					<div class="mt-4 text-xs text-gray-400 font-mono flex gap-x-6">
+						<div>📁 common/characters/<span id="char-filename">TAG_characters.txt</span></div>
+						<div>📁 localisation/english/<span id="char-loc-filename">TAG_l_english.yml</span></div>
+					</div>
+				</div>
+			</div>
+		</div>
 
         <!-- Footer -->
         <div class="mt-12 text-center text-xs text-gray-400 font-mono border-t border-[#c8102e] pt-6">
             Full Paradox Interactive script output • Ready for mod folder<br>
-            <span class="text-[#00ff9d]">v2.6</span> • Country and news generator
+            <span class="text-[#00ff9d]">v2.7</span> • Country, character and news generator
         </div>
     </div>
 

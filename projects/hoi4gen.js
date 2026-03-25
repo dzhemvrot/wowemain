@@ -1,5 +1,5 @@
-// ====================== HOI4 Country & News Generator v2.6 ======================
-// Improvement: Fully modifiable ideology-specific country names
+// ====================== HOI4 Country & News Generator v2.7 ======================
+// Improvement: Character gen
 
 let currentTab = 0;
 let newsOptions = [
@@ -551,6 +551,245 @@ function generateNews() {
     lastNewsData = { id, title, desc, picture, triggerTag, options: [...newsOptions], code: eventCode };
 }
 
+// ====================== CHARACTER GENERATOR v2.7 ======================
+
+let lastCharacterData = null;
+
+function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('tab-0').classList.toggle('tab-active', tab === 0);
+    document.getElementById('tab-1').classList.toggle('tab-active', tab === 1);
+    document.getElementById('tab-2').classList.toggle('tab-active', tab === 2);
+    document.getElementById('panel-0').classList.toggle('hidden', tab !== 0);
+    document.getElementById('panel-1').classList.toggle('hidden', tab !== 1);
+    document.getElementById('panel-2').classList.toggle('hidden', tab !== 2);
+}
+
+function renderCharacterForm() {
+    const container = document.getElementById('character-form');
+    container.innerHTML = `
+        <div class="space-y-8">
+
+            <!-- Basic Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="input-label block mb-1">CHARACTER ID (unique)</label>
+                    <input id="char-id" type="text" value="NEW_leader1" 
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateCharacter()">
+                </div>
+                <div>
+                    <label class="input-label block mb-1">COUNTRY TAG</label>
+                    <input id="char-tag" type="text" value="NEW" maxlength="3"
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateCharacter()">
+                </div>
+            </div>
+
+            <div>
+                <label class="input-label block mb-1">NAME (localisation key)</label>
+                <input id="char-name" type="text" value="NEW_nestor_makhno" 
+                       class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateCharacter()">
+                <p class="text-xs text-gray-400 mt-1">Will appear as <span class="text-[#00ff9d]">NEW_nestor_makhno:0 "Nestor Makhno"</span></p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="input-label block mb-1">GENDER</label>
+                    <select id="char-gender" class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" onchange="liveUpdateCharacter()">
+                        <option value="">undefined (default)</option>
+                        <option value="male" selected>male</option>
+                        <option value="female">female</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="input-label block mb-1">PORTRAIT GFX (civilian large)</label>
+                    <input id="char-portrait" type="text" value="GFX_portrait_NEW_nestor_makhno" 
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateCharacter()">
+                </div>
+                <div>
+                    <label class="input-label block mb-1">SMALL PORTRAIT (advisor)</label>
+                    <input id="char-small-portrait" type="text" value="GFX_portrait_NEW_nestor_makhno_small" 
+                           class="w-full bg-black border-2 border-[#c8102e] px-4 py-3 text-xl font-mono" oninput="liveUpdateCharacter()">
+                </div>
+            </div>
+
+            <!-- Roles -->
+            <div class="space-y-6">
+                <!-- Country Leader -->
+                <div class="bg-black/60 p-6 rounded border border-[#c8102e]/70">
+                    <label class="input-label block mb-3 text-[#00ff9d]">COUNTRY LEADER ROLE</label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm mb-1">Ideology</label>
+                            <input id="char-ideology" type="text" value="anarchist_communism" 
+                                   class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono" oninput="liveUpdateCharacter()">
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1">Traits (space separated)</label>
+                            <input id="char-leader-traits" type="text" value="agrarian_activist" 
+                                   class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono" oninput="liveUpdateCharacter()">
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label class="block text-sm mb-1">Description key</label>
+                        <input id="char-desc" type="text" value="NEW_nestor_makhno_desc" 
+                               class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono" oninput="liveUpdateCharacter()">
+                    </div>
+                </div>
+
+                <!-- Advisor Role -->
+                <div class="bg-black/60 p-6 rounded border border-[#c8102e]/70">
+                    <label class="input-label block mb-3 text-[#00ff9d]">ADVISOR ROLE</label>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm mb-1">Slot</label>
+                            <select id="char-advisor-slot" class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono" onchange="liveUpdateCharacter()">
+                                <option value="political_advisor">Political Advisor</option>
+                                <option value="theorist" selected>Theorist</option>
+                                <option value="army_chief">Army Chief</option>
+                                <option value="navy_chief">Navy Chief</option>
+                                <option value="air_chief">Air Chief</option>
+                                <option value="high_command">High Command</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1">Idea Token</label>
+                            <input id="char-idea-token" type="text" value="NEW_makhno_theorist" 
+                                   class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono" oninput="liveUpdateCharacter()">
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1">Ledger</label>
+                            <select id="char-ledger" class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono" onchange="liveUpdateCharacter()">
+                                <option value="army">Army</option>
+                                <option value="civilian" selected>Civilian</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label class="block text-sm mb-1">Advisor Traits (space separated)</label>
+                        <input id="char-advisor-traits" type="text" value="military_theorist" 
+                               class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono" oninput="liveUpdateCharacter()">
+                    </div>
+                </div>
+
+                <!-- Corps Commander -->
+                <div class="bg-black/60 p-6 rounded border border-[#c8102e]/70">
+                    <label class="input-label block mb-3 text-[#00ff9d]">CORPS COMMANDER ROLE</label>
+                    <div>
+                        <label class="block text-sm mb-1">Traits (space separated)</label>
+                        <input id="char-commander-traits" type="text" value="media_personality winter_specialist" 
+                               class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono" oninput="liveUpdateCharacter()">
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+                        <div><input id="char-skill" type="number" value="5" min="0" max="10" class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono text-center" oninput="liveUpdateCharacter()" placeholder="skill"></div>
+                        <div><input id="char-attack" type="number" value="5" min="0" max="10" class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono text-center" oninput="liveUpdateCharacter()" placeholder="attack"></div>
+                        <div><input id="char-defense" type="number" value="3" min="0" max="10" class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono text-center" oninput="liveUpdateCharacter()" placeholder="defense"></div>
+                        <div><input id="char-planning" type="number" value="4" min="0" max="10" class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono text-center" oninput="liveUpdateCharacter()" placeholder="planning"></div>
+                        <div><input id="char-logistics" type="number" value="5" min="0" max="10" class="w-full bg-black border border-[#c8102e] px-4 py-3 font-mono text-center" oninput="liveUpdateCharacter()" placeholder="logistics"></div>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="generateCharacter()" 
+                    class="w-full py-5 bg-[#c8102e] hover:bg-[#a00d24] text-2xl font-bold tracking-widest transition-all">
+                GENERATE CHARACTER FILES →
+            </button>
+        </div>
+    `;
+}
+
+function liveUpdateCharacter() {
+    clearTimeout(liveTimeout);
+    liveTimeout = setTimeout(generateCharacter, 10);
+}
+
+function generateCharacter() {
+    const id = document.getElementById('char-id').value.trim() || 'NEW_leader1';
+    const tag = (document.getElementById('char-tag').value || 'NEW').toUpperCase().trim();
+    const nameKey = document.getElementById('char-name').value.trim() || `${tag}_character`;
+    const gender = document.getElementById('char-gender').value;
+    const portrait = document.getElementById('char-portrait').value.trim() || `GFX_portrait_${id}`;
+    const smallPortrait = document.getElementById('char-small-portrait').value.trim() || `${portrait}_small`;
+
+    // Country Leader
+    const ideology = document.getElementById('char-ideology').value.trim() || 'neutrality';
+    const leaderTraits = document.getElementById('char-leader-traits').value.trim();
+    const descKey = document.getElementById('char-desc').value.trim() || `${id}_desc`;
+
+    // Advisor
+    const advisorSlot = document.getElementById('char-advisor-slot').value;
+    const ideaToken = document.getElementById('char-idea-token').value.trim() || `${id}_advisor`;
+    const ledger = document.getElementById('char-ledger').value;
+    const advisorTraits = document.getElementById('char-advisor-traits').value.trim();
+
+    // Commander
+    const cmdTraits = document.getElementById('char-commander-traits').value.trim();
+    const skill = parseInt(document.getElementById('char-skill').value) || 5;
+    const attack = parseInt(document.getElementById('char-attack').value) || 5;
+    const defense = parseInt(document.getElementById('char-defense').value) || 3;
+    const planning = parseInt(document.getElementById('char-planning').value) || 4;
+    const logistics = parseInt(document.getElementById('char-logistics').value) || 5;
+
+    let charCode = `characters = {\n`;
+    charCode += `    ${id} = {\n`;
+    charCode += `        name = ${nameKey}\n`;
+    if (gender) charCode += `        gender = ${gender}\n`;
+
+    charCode += `        portraits = {\n`;
+    charCode += `            civilian = {\n`;
+    charCode += `                large = ${portrait}\n`;
+    charCode += `                small = ${smallPortrait}\n`;
+    charCode += `            }\n`;
+    charCode += `            army = {\n`;
+    charCode += `                large = ${portrait}\n`;
+    charCode += `            }\n`;
+    charCode += `        }\n\n`;
+
+    // Country Leader
+    charCode += `        country_leader = {\n`;
+    charCode += `            ideology = ${ideology}\n`;
+    if (leaderTraits) charCode += `            traits = { ${leaderTraits} }\n`;
+    charCode += `            desc = ${descKey}\n`;
+    charCode += `        }\n\n`;
+
+    // Advisor
+    charCode += `        advisor = {\n`;
+    charCode += `            slot = ${advisorSlot}\n`;
+    charCode += `            idea_token = ${ideaToken}\n`;
+    charCode += `            ledger = ${ledger}\n`;
+    if (advisorTraits) charCode += `            traits = { ${advisorTraits} }\n`;
+    charCode += `        }\n\n`;
+
+    // Corps Commander
+    charCode += `        corps_commander = {\n`;
+    if (cmdTraits) charCode += `            traits = { ${cmdTraits} }\n`;
+    charCode += `            skill = ${skill}\n`;
+    charCode += `            attack_skill = ${attack}\n`;
+    charCode += `            defense_skill = ${defense}\n`;
+    charCode += `            planning_skill = ${planning}\n`;
+    charCode += `            logistics_skill = ${logistics}\n`;
+    charCode += `        }\n`;
+    charCode += `    }\n`;
+    charCode += `}`;
+
+    // Localisation snippet
+    const locSnippet = ` ${nameKey}:0 "Nestor Makhno (change me)"\n ${descKey}:0 "The Black Army leader and anarchist revolutionary."\n`;
+
+    const preview = `# common/characters/${tag}_characters.txt\n` +
+                    `${charCode}\n\n` +
+                    `# Add to history/countries/${tag}_1936.txt (or your history file):\n` +
+                    `recruit_character = ${id}\n\n` +
+                    `# Localisation (english/${tag}_l_english.yml):\n` +
+                    `l_english:\n${locSnippet}\n` +
+                    `# Don't forget to add the GFX portrait definitions in interface/ files!`;
+
+    document.getElementById('character-preview').textContent = preview;
+    document.getElementById('char-filename').textContent = `${tag}_characters.txt`;
+    document.getElementById('char-loc-filename').textContent = `${tag}_l_english.yml`;
+
+    lastCharacterData = { id, tag, code: charCode, loc: locSnippet };
+}
+
 // ====================== EXPORT FUNCTIONS ======================
 function exportCountryFiles() {
     if (!lastCountryData) { alert("Please generate a country first!"); return; }
@@ -569,6 +808,15 @@ function exportCountryFiles() {
 function exportNewsFile() {
     if (!lastNewsData) { alert("Please generate a news event first!"); return; }
     downloadFile(lastNewsData.code, `${lastNewsData.id.replace(/\./g, '_')}.txt`, 'text/plain');
+}
+
+function exportCharacterFile() {
+    if (!lastCharacterData) {
+        alert("Generate a character first!");
+        return;
+    }
+    const content = lastCharacterData.code + "\n\n# Localisation snippet:\n" + lastCharacterData.loc;
+    downloadFile(content, `${lastCharacterData.tag}_character_${lastCharacterData.id}.txt`, 'text/plain');
 }
 
 function downloadFile(content, filename, mimeType = 'text/plain') {
@@ -602,11 +850,13 @@ window.onload = function() {
     renderCountryForm();
     renderNewsForm();
     renderNewsOptions();
+    renderCharacterForm();   // <-- new
 
     setTimeout(() => {
         normalizeParties();
         generateCountry();
         generateNews();
-        console.log('%c✅ HOI4 Generator v2.6 - Ideology names fully modifiable!', 'color:#00ff9d; font-size:16px');
+        generateCharacter(); // initial preview
+        console.log('%c✅ HOI4 Generator v2.7 - Character tab added!', 'color:#00ff9d; font-size:16px');
     }, 100);
 };
