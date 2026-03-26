@@ -49,7 +49,7 @@ const translations = {
 	"intro-greeting": "Sveiki!",
     "intro-name": "Mani sauc <b>Timurs</b>",
     "intro-known-as": "Es esmu pazīstams arī kā:",
-	"intro-dzhem": "(Prosecutor)&nbsp;<b>Dzhemvrot</b> (no krievu <i>Джемврот</i> — Jaminmouth) vai <b>lomabol</b>.",
+	"intro-dzhem": "(Prosecutor)&nbsp;<b>Dzhemvrot</b> (no krievu <i>Джемврот</i> — Džemsmutē) vai <b>lomabol</b>.",
     "from-country": "Es nāku no skaistās <b>Latvijas</b>.",
     "title-links": "Saites uz manām vietām",
     "title-projects": "Mani projekti",
