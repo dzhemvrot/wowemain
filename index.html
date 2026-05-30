@@ -35,8 +35,9 @@
     </div>
   </nav>
 
+  <!-- Desktop only -->
   <div class="row p-4 justify-content-center">
-    <div class="col justify-content-center">
+    <div class="col-3 justify-content-center d-none d-lg-block">
       <div class="card">
         <img src="images/tbesarabs_022026.JPG" class="rounded img-fluid" alt="Me in February of 2026.">
         <div class="card-body">
@@ -45,40 +46,52 @@
             <span data-key="intro-name">My name is <b>Timurs</b>, but you can call me Tim</span>.<br>
             <span data-key="intro-known-as">I am also known as:</span> <b>wowemain</b>, <span data-key="intro-dzhem">(Prosecutor)&nbsp;<b>Dzhemvrot</b> (from Russian <i>Джемврот</i> — Jaminmouth) or <b>lomabol</b>.</span><br>
             <span data-key="from-country">I come from the beautiful country of <b>Latvia</b>.</span> 
-            <img src="images/latvia_flag.png" width="20" height="10" alt=""><br>
+            <img src="images/latvia_flag.png" width="20" height="10" alt=""><br><br>
+			<span data-key="shortabtme">В данный момент я проживаю в Риге. Интересуюсь технологиями, работой с людьми и развитием проектов. Сейчас получаю среднее образование, имею опыт в работе с клиентами, командной работе и обучении людей.</span><br>
             <span id="AgeCounter"></span>
           </p>
-
-          <!-- Mobile only -->
-          <div class="d-lg-none">
-            <hr>
+		  <hr>
             <h5 class="card-title" data-key="title-links">Links to some of my places</h5>
             <p class="card-text">
               <div class="btn-group-vertical" role="group" aria-label="Vertical button group">
-                <a href="https://www.youtube.com/@wowemain" class="btn btn-outline-primary" target="_blank" data-key="yt-first">My first YouTube channel</a>
 				<a href="https://www.youtube.com/@dzhemvrot" class="btn btn-outline-primary" target="_blank" data-key="yt-main">My main YouTube channel</a>
 				<a href="https://www.twitch.tv/wowemain" class="btn btn-outline-primary" target="_blank" data-key="twitch">My Twitch</a>
 				<a href="https://github.com/dzhemvrot" class="btn btn-outline-primary" target="_blank" data-key="github">My GitHub</a>
 				<a href="https://www.instagram.com/tbesarabs" class="btn btn-outline-primary" target="_blank" data-key="instagram">My Instagram</a>
 				<a href="https://www.facebook.com/timurbesarab" class="btn btn-outline-primary" target="_blank" data-key="facebook">My Facebook</a>
 				<a href="https://discord.gg/Z95EmSHDeN" class="btn btn-outline-primary" target="_blank" data-key="discord">My Discord server</a>
+				<a href="https://t.me/tbesarabs" class="btn btn-outline-primary" target="_blank" data-key="telegram">My Telegram</a>
               </div>
             </p>
+        </div>
+      </div>
+    </div>
+	
+	<!-- Mobile only -->
+	<div class="col justify-content-center d-lg-none">
+      <div class="card">
+        <img src="images/tbesarabs_022026.JPG" class="rounded img-fluid" alt="Me in February of 2026.">
+        <div class="card-body">
+          <h5 class="card-title" data-key="intro-greeting">Hello!</h5>
+          <p class="card-text">
+            <span data-key="intro-name">My name is <b>Timurs</b>, but you can call me Tim</span>.<br>
+            <span data-key="intro-known-as">I am also known as:</span> <b>wowemain</b>, <span data-key="intro-dzhem">(Prosecutor)&nbsp;<b>Dzhemvrot</b> (from Russian <i>Джемврот</i> — Jaminmouth) or <b>lomabol</b>.</span><br>
+            <span data-key="from-country">I come from the beautiful country of <b>Latvia</b>.</span> 
+            <img src="images/latvia_flag.png" width="20" height="10" alt=""><br><br>
+			<span data-key="shortabtme">В данный момент я проживаю в Риге. Интересуюсь технологиями, работой с людьми и развитием проектов. Сейчас получаю среднее образование, имею опыт в работе с клиентами, командной работе и обучении людей.</span><br>
+            <span id="AgeCounter"></span>
+          </p>
             <hr>
-            <h5 class="card-title" data-key="title-projects">My projects</h5>
+            <h5 class="card-title" data-key="title-links">Links to some of my places</h5>
             <p class="card-text">
-              <span data-key="projects-text">Not much, eh? Still, there's more to come ;)</span><br class="d-lg-none">
-              <div class="btn-group-vertical" role="group">
-                <!--a href="projects/hoi4_generator.html" class="btn btn-success btn-blink" data-key="hoi4-generator">HOI4 generator (in-browser)</a--!>
-                <div class="btn-group" role="group">
-                    <a href="https://github.com/dzhemvrot/zlib-DC" class="btn btn-outline-success" target="_blank" data-key="zlib-dc">zlib DC</a>
-					<a href="https://github.com/dzhemvrot/gzip-DC" class="btn btn-outline-success" target="_blank" data-key="gzip-dc">gzip DC</a>
-					<a href="https://github.com/dzhemvrot/Zstd-DC" class="btn btn-outline-success" target="_blank" data-key="zstd-dc">Zstd DC</a>
-                </div>
-                <a href="https://github.com/dzhemvrot/song-randomizer" class="btn btn-outline-success" target="_blank" data-key="song-randomizer">Song Randomizer</a>
-				<a href="https://github.com/dzhemvrot/SuzerainSaveEditor" class="btn btn-outline-success" target="_blank" data-key="suzerain-editor">Suzerain Save Editor</a>
-				<a href="https://github.com/dzhemvrot/tfc" class="btn btn-outline-success" target="_blank" data-key="tfc-anvil">TerraFirmaCraft Anvil Helper</a>
-				<a href="https://github.com/dzhemvrot/dezuresana_r22vsk_2026" class="btn btn-outline-success" target="_blank" data-key="floor-scheduler">Floor Monitor Scheduler</a>
+              <div class="btn-group-vertical" role="group" aria-label="Vertical button group">
+				<a href="https://www.youtube.com/@dzhemvrot" class="btn btn-outline-primary" target="_blank" data-key="yt-main">My main YouTube channel</a>
+				<a href="https://www.twitch.tv/wowemain" class="btn btn-outline-primary" target="_blank" data-key="twitch">My Twitch</a>
+				<a href="https://github.com/dzhemvrot" class="btn btn-outline-primary" target="_blank" data-key="github">My GitHub</a>
+				<a href="https://www.instagram.com/tbesarabs" class="btn btn-outline-primary" target="_blank" data-key="instagram">My Instagram</a>
+				<a href="https://www.facebook.com/timurbesarab" class="btn btn-outline-primary" target="_blank" data-key="facebook">My Facebook</a>
+				<a href="https://discord.gg/Z95EmSHDeN" class="btn btn-outline-primary" target="_blank" data-key="discord">My Discord server</a>
+				<a href="https://t.me/tbesarabs" class="btn btn-outline-primary" target="_blank" data-key="telegram">My Telegram</a>
               </div>
             </p>
             <hr>
@@ -105,7 +118,6 @@
             <h5 class="card-title" data-key="title-countdowns">Countdowns</h5>
             <p class="card-text" id="summerCountdownMobile"></p>
             <p class="card-text" id="BDayCountdownMobile"></p>
-          </div>
         </div>
       </div>
     </div>
@@ -113,45 +125,118 @@
 	<!-- Desktop only -->
     <div class="col justify-content-center d-none d-lg-block">
       <div class="card">
-        <img src="images/www.JPG" class="rounded img-fluid" alt="Me and my friends in December of 2025.">
+		<div class="card-header">
+			<ul class="nav nav-tabs card-header-tabs" id="myTab" role="tablist">
+				<li class="nav-item">
+					<a class="nav-link active" id="tab0-tab" data-bs-toggle="tab" href="#tab0" role="tab" aria-controls="tab0" aria-selected="true" data-key="title-projects">Work experience</a>
+				</li>
+				<li class="nav-item">
+					<a class="nav-link" id="tab1-tab" data-bs-toggle="tab" href="#tab1" role="tab" aria-controls="tab1" aria-selected="false" data-key="title-edu">Education</a>
+				</li>
+			</ul>
+		</div>
         <div class="card-body">
-          <h5 class="card-title" data-key="title-links">Links to some of my places</h5>
+		<div class="tab-content" id="myTabContent">
+		<div class="tab-pane fade show active" id="tab0" role="tabpanel" aria-labelledby="tab0-tab">
+          <h5 class="card-title" data-key="title-projects">Work experience</h5>
           <p class="card-text">
-            <div class="btn-group-vertical" role="group">
-                <a href="https://www.youtube.com/@wowemain" class="btn btn-outline-primary" target="_blank" data-key="yt-first">My first YouTube channel</a>
-				<a href="https://www.youtube.com/@dzhemvrot" class="btn btn-outline-primary" target="_blank" data-key="yt-main">My main YouTube channel</a>
-				<a href="https://www.twitch.tv/wowemain" class="btn btn-outline-primary" target="_blank" data-key="twitch">My Twitch</a>
-				<a href="https://github.com/dzhemvrot" class="btn btn-outline-primary" target="_blank" data-key="github">My GitHub</a>
-				<a href="https://www.instagram.com/tbesarabs" class="btn btn-outline-primary" target="_blank" data-key="instagram">My Instagram</a>
-				<a href="https://www.facebook.com/timurbesarab" class="btn btn-outline-primary" target="_blank" data-key="facebook">My Facebook</a>
-				<a href="https://discord.gg/Z95EmSHDeN" class="btn btn-outline-primary" target="_blank" data-key="discord">My Discord server</a>
-            </div>
+            <!-- Section: Timeline -->
+				<div class="main-timeline-2">
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/Taichi.jpg" class="card-img-top" alt="Me in 2025 in Riga, posing in one of the Wushu poses.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="wushuwork">Sports coach at Wushu school "Wulin"</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/03/2022 - 31/05/2023</p>
+						<!--p class="mb-0">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
+						  incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
+						  ullamco laboris nisi ut aliquip ex ea commodo consequat.</p--!>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 right-2">
+					<div class="card">
+					  <img src="images/bestworker.jpg" class="card-img-top" alt="Employee of the month poster, May 2025.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="mcdwork">McDonald's	crew member at McDonald's Underground</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 18/03/2025 - 01/08/2025</p>
+						<p class="mb-0" data-key="bestworkernote"><i>Note: Employee of the month in April 2025!</i></p>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/gel.jpg" class="card-img-top" alt="Me in GEL uniform in front of my McDonald's workplace in 2025.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="mcdgelwork">Guest Experience Leader at McDonald's Underground</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/08/2025 - 11/11/2025</p>
+					  </div>
+					</div>
+				  </div>
+				  </div>
+			<!-- Section: Timeline -->
           </p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col justify-content-center d-none d-lg-block">
-      <div class="card">
-        <img src="images/projects.JPG" class="rounded img-fluid" alt="Me in 2024.">
-        <div class="card-body">
-          <h5 class="card-title" data-key="title-projects">My projects</h5>
-          <p class="card-text">
-            <span data-key="projects-text">Not much, eh? Still, there's more to come ;)</span><br>
-            <div class="btn-group-vertical" role="group">
-              <!--a href="projects/hoi4_generator.html" class="btn btn-success btn-blink" data-key="hoi4-generator">HOI4 generator (in-browser)</a--!>
-              <div class="btn-group" role="group">
-                <a href="https://github.com/dzhemvrot/zlib-DC" class="btn btn-outline-success" target="_blank" data-key="zlib-dc">zlib DC</a>
-				<a href="https://github.com/dzhemvrot/gzip-DC" class="btn btn-outline-success" target="_blank" data-key="gzip-dc">gzip DC</a>
-				<a href="https://github.com/dzhemvrot/Zstd-DC" class="btn btn-outline-success" target="_blank" data-key="zstd-dc">Zstd DC</a>
-              </div>
-              <a href="https://github.com/dzhemvrot/song-randomizer" class="btn btn-outline-success" target="_blank" data-key="song-randomizer">Song Randomizer</a>
-			  <a href="https://github.com/dzhemvrot/SuzerainSaveEditor" class="btn btn-outline-success" target="_blank" data-key="suzerain-editor">Suzerain Save Editor</a>
-			  <a href="https://github.com/dzhemvrot/tfc" class="btn btn-outline-success" target="_blank" data-key="tfc-anvil">TerraFirmaCraft Anvil Helper</a>
-			  <a href="https://github.com/dzhemvrot/dezuresana_r22vsk_2026" class="btn btn-outline-success" target="_blank" data-key="floor-scheduler">Floor Monitor Scheduler</a>
-            </div>
-          </p>
-        </div>
+		</div>
+        <div class="tab-pane fade" id="tab1" role="tabpanel" aria-labelledby="tab1-tab">
+			<h5 class="card-title" data-key="title-edu">Education</h5>
+			<!-- Section: Timeline -->
+				<div class="main-timeline-2">
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/mesmol.jpg" class="card-img-top" alt="Me small.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="preschool">Preschool at Rigas 41. pirmsskolas izglitibas iestade</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/09/2010 - 31/05/2014</p>
+						<!--p class="mb-0">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
+						  incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
+						  ullamco laboris nisi ut aliquip ex ea commodo consequat.</p--!>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 right-2">
+					<div class="card">
+					  <img src="images/r22vsk_1.jpg" class="card-img-top" alt="Me at debate tournament in 2022.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="primmid">Primary and middle school at Rīgas 22. vidusskola</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/09/2014 - 21/06/2023</p>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/r22vsk_2.jpg" class="card-img-top" alt="Me at debate tournament in 2023.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="secondary">Secondary school at Rīgas 22. vidusskola</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/09/2023 - 22/05/2024</p>
+						<p class="mb-0" data-key="secondaryfos">Field of study: Mathematics</p>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 right-2">
+					<div class="card">
+					  <img src="images/rvt.webp" class="card-img-top" alt="Me at the RVT march in 2024.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="prof">Professional education at Rīgas Valsts Tehnikums</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/09/2024 - 20/01/2025</p>
+						<p class="mb-0" data-key="proffos">Field of study: Computer Technician</p>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/r22vsk_3.jpg" class="card-img-top" alt="Me at the New Year's party at school in 2025.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="secondary2">Secondary school at Rīgas 22. vidusskola</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 29/10/2025 - ...</p>
+						<p class="mb-0" data-key="secondaryfos2">Field of study: Humanities and social sciences</p>
+					  </div>
+					</div>
+				  </div>
+				 </div>
+			<!-- Section: Timeline -->
+		</div>
+		</div>
+		</div>
       </div>
     </div>
 
@@ -186,6 +271,126 @@
           <p class="card-text" id="summerCountdown"></p>
           <p class="card-text" id="BDayCountdown"></p>
         </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Mobile only -->
+  <div class="row p-4 justify-content-center d-lg-none">
+	<div class="col justify-content-center d-lg-none">
+      <div class="card">
+		<div class="card-header">
+			<ul class="nav nav-tabs card-header-tabs" id="myTab" role="tablist">
+				<li class="nav-item">
+					<a class="nav-link active" id="tab2-tab" data-bs-toggle="tab" href="#tab2" role="tab" aria-controls="tab2" aria-selected="true" data-key="title-projects">Work experience</a>
+				</li>
+				<li class="nav-item">
+					<a class="nav-link" id="tab3-tab" data-bs-toggle="tab" href="#tab3" role="tab" aria-controls="tab3" aria-selected="false" data-key="title-edu">Education</a>
+				</li>
+			</ul>
+		</div>
+        <div class="card-body">
+		<div class="tab-content" id="myTabContent">
+		<div class="tab-pane fade show active" id="tab2" role="tabpanel" aria-labelledby="tab2-tab">
+          <h5 class="card-title" data-key="title-projects">Work experience</h5>
+          <p class="card-text">
+            <!-- Section: Timeline -->
+				<div class="main-timeline-2">
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/Taichi.jpg" class="card-img-top" alt="Me in 2025 in Riga, posing in one of the Wushu poses.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="wushuwork">Sports coach at Wushu school "Wulin"</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/03/2022 - 31/05/2023</p>
+						<!--p class="mb-0">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
+						  incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
+						  ullamco laboris nisi ut aliquip ex ea commodo consequat.</p--!>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 right-2">
+					<div class="card">
+					  <img src="images/bestworker.jpg" class="card-img-top" alt="Employee of the month poster, May 2025.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="mcdwork">McDonald's	crew member at McDonald's Underground</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 18/03/2025 - 01/08/2025</p>
+						<p class="mb-0" data-key="bestworkernote"><i>Note: Employee of the month in April 2025!</i></p>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/gel.jpg" class="card-img-top" alt="Me in GEL uniform in front of my McDonald's workplace in 2025.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="mcdgelwork">Guest Experience Leader at McDonald's Underground</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/08/2025 - 11/11/2025</p>
+					  </div>
+					</div>
+				  </div>
+				  </div>
+			<!-- Section: Timeline -->
+          </p>
+		</div>
+        <div class="tab-pane fade" id="tab3" role="tabpanel" aria-labelledby="tab3-tab">
+			<h5 class="card-title" data-key="title-edu">Education</h5>
+			<!-- Section: Timeline -->
+				<div class="main-timeline-2">
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/mesmol.jpg" class="card-img-top" alt="Me small.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="preschool">Preschool at Rigas 41. pirmsskolas izglitibas iestade</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/09/2010 - 31/05/2014</p>
+						<!--p class="mb-0">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
+						  incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
+						  ullamco laboris nisi ut aliquip ex ea commodo consequat.</p--!>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 right-2">
+					<div class="card">
+					  <img src="images/r22vsk_1.jpg" class="card-img-top" alt="Me at debate tournament in 2022.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="primmid">Primary and middle school at Rīgas 22. vidusskola</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/09/2014 - 21/06/2023</p>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/r22vsk_2.jpg" class="card-img-top" alt="Me at debate tournament in 2023.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="secondary">Secondary school at Rīgas 22. vidusskola</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/09/2023 - 22/05/2024</p>
+						<p class="mb-0" data-key="secondaryfos">Field of study: Mathematics</p>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 right-2">
+					<div class="card">
+					  <img src="images/rvt.webp" class="card-img-top" alt="Me at the RVT march in 2024.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="prof">Professional education at Rīgas Valsts Tehnikums</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 01/09/2024 - 20/01/2025</p>
+						<p class="mb-0" data-key="proffos">Field of study: Computer Technician</p>
+					  </div>
+					</div>
+				  </div>
+				  <div class="timeline-2 left-2">
+					<div class="card">
+					  <img src="images/r22vsk_3.jpg" class="card-img-top" alt="Me at the New Year's party at school in 2025.">
+					  <div class="card-body p-4">
+						<h4 class="fw-bold mb-4" data-key="secondary2">Secondary school at Rīgas 22. vidusskola</h4>
+						<p class="text-muted mb-4"><i class="far fa-clock" aria-hidden="true"></i> 29/10/2025 - ...</p>
+						<p class="mb-0" data-key="secondaryfos2">Field of study: Humanities and social sciences</p>
+					  </div>
+					</div>
+				  </div>
+				 </div>
+			<!-- Section: Timeline -->
+		</div>
+		</div>
+		</div>
       </div>
     </div>
   </div>
