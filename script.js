@@ -36,6 +36,7 @@ const translations = {
 	"mcdwork": "McDonald's crew member at McDonald's Underground",
 	"bestworkernote": "<i>Note: Employee of the month in April 2025!</i>",
 	"mcdgelwork": "Guest Experience Leader at McDonald's Underground",
+	"tomowork": "Administrator at Apart Hotel Tomo",
 	
 	"preschool": "Preschool at Rīgas 41. pirmsskolas izglitibas iestade",
 	"primmid": "Primary and middle school at Rīgas 22. vidusskola",
@@ -87,6 +88,7 @@ const translations = {
 	"mcdwork": "Darbinieks McDonald's Underground restorānā",
 	"bestworkernote": "<i>Piezīme: 2025. gada aprīļa mēneša labākais darbinieks!</i>",
 	"mcdgelwork": "Viesmīlības pakalpojumu speciālists McDonald's Underground restorānā",
+	"tomowork": "Administrators Apart Hotel Tomo",
 	
 	"preschool": "Pirmsskolas izglitība Rīgas 41. pirmsskolas izglitibas iestadē",
 	"primmid": "Sakumizglitība un pamatizglitība Rīgas 22. vidusskolā",
@@ -138,6 +140,7 @@ const translations = {
 	"mcdwork": "Работник в ресторане McDonald's Underground",
 	"bestworkernote": "<i>Примечание: лучший сотрудник месяца в апреле 2025 года!</i>",
 	"mcdgelwork": "Специалист по гостеприимству в ресторане McDonald's Underground",
+	"tomowork": Администратор в Apart Hotel Tomo",
 	
 	"preschool": "Дошкольное образование в Рижском 41-м дошкольном учебном заведении",
 	"primmid": "Начальное и неполное среднее образование в Рижской 22-й средней школе",
