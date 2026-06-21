@@ -140,7 +140,7 @@ const translations = {
 	"mcdwork": "Работник в ресторане McDonald's Underground",
 	"bestworkernote": "<i>Примечание: лучший сотрудник месяца в апреле 2025 года!</i>",
 	"mcdgelwork": "Специалист по гостеприимству в ресторане McDonald's Underground",
-	"tomowork": Администратор в Apart Hotel Tomo",
+	"tomowork": "Администратор в Apart Hotel Tomo",
 	
 	"preschool": "Дошкольное образование в Рижском 41-м дошкольном учебном заведении",
 	"primmid": "Начальное и неполное среднее образование в Рижской 22-й средней школе",
