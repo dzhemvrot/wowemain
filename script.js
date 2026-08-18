@@ -134,7 +134,7 @@ const translations = {
 	"FAQtitle": "F.A.Q.",
 
 	"faq-q1": "Kas tu esi?",
-	"faq-a1": "Neskatoties uz to, kā tas varētu izskatīties, es esmu cilvēks. Konkrēti, es esmu vīrietis vārdā Timurs Besarabs, 19 gadus vecs. Es dzimu 2007. gada 30. jūnijā plkst. 10:27 pēc vietējā laika.",
+	"faq-a1": "Neskatoties uz jebko, es esmu cilvēks. Konkrēti, es esmu vīrietis vārdā Timurs Besarabs, 19 gadus vecs. Es dzimu 2007. gada 30. jūnijā plkst. 10:27 pēc vietējā laika.",
 	"faq-q2": "No kurienes tu esi?",
 	"faq-a2": "Es esmu no Latvijas, Rīgas. Es arī dzīvoju šeit šobrīd un neplānoju pārcelties nekur citur.",
 	"faq-q3": "Kādas valstis tu esi apmeklējis?",
@@ -211,7 +211,7 @@ const translations = {
 	"FAQtitle": "ЧАВО",
 
 	"faq-q1": "Кто ты?",
-	"faq-a1": "Несмотря на то, как это может выглядеть, я человек. Конкретно, я мужчина по имени Тимур Бесараб, мне 19 лет. Я родился 30 июня 2007 года в 10:27 по местному времени.",
+	"faq-a1": "Несмотря ни на что, я человек. Конкретно, я мужчина по имени Тимур Бесараб, мне 19 лет. Я родился 30 июня 2007 года в 10:27 по местному времени.",
 	"faq-q2": "Откуда ты?",
 	"faq-a2": "Я из Латвии, из Риги. Я также живу здесь сейчас и не планирую никуда переезжать.",
 	"faq-q3": "В каких странах ты бывал?",
