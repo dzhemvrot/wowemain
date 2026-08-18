@@ -146,7 +146,7 @@ const translations = {
 	"faq-q6": "Kāds ir tavs ilgtermiņa mērķis?",
 	"faq-a6": "Es gribu kļūt par vēstures skolotāju un strādāt savā skolā; izveidot lielu ģimeni, uzcelt māju un iestādīt dārzu. Diezgan tradicionāli, ja jautā man. :D",
 	"faq-q7": "Kāda ir tava mīļākā dziesma/grāmata/filma/spēle/cits medijs?",
-	"faq-a7": "Es došu atbildi, kas visiem patīk: tas ir atkarīgs. Precīzāk, atkarīgs no tā, kad jautā. Es varu teikt, ka man patīk daudz kas: Ace Attorney spēļu sērija, Kubrika un Tarantīno filmas, lasīšana (gandrīz) jebkā, ko var lasīt u.c., bet man ārkārtīgi grūti nosaukt konkrētu darbu, par kuru es būtu pārliecināts, ka tas ir mans mīļākais un tāds arī paliks.<br><br>MLP: FiM tomēr ir labākā animācijas seriāls, kāds jebkad radīts.",
+	"faq-a7": "Es došu atbildi, kas visiem patīk: tas ir atkarīgs. Precīzāk, atkarīgs no tā, kad jautāt. Es varu teikt, ka man patīk daudz kas: Ace Attorney spēļu sērija, Kubrika un Tarantīno filmas, lasīšana (gandrīz) jebkā, ko var lasīt u.c., bet man ārkārtīgi grūti nosaukt konkrētu darbu, par kuru es būtu pārliecināts, ka tas ir mans mīļākais un tāds arī paliks.<br><br>MLP: FiM tomēr ir labākā animācijas seriāls, kāds jebkad radīts.",
 
 	"404-title": "Hm... šeit nekā nav.",
 	"404-text": "Lapa, kuru mēģināji apmeklēt, netika atrasta!",
@@ -223,7 +223,7 @@ const translations = {
 	"faq-q6": "Какая у тебя долгосрочная цель?",
 	"faq-a6": "Я хочу стать учителем истории и работать в своей школе; завести большую семью, построить дом и посадить сад. Довольно традиционно, на мой взгляд. :D",
 	"faq-q7": "Какая твоя любимая песня/книга/фильм/игра/другое произведение?",
-	"faq-a7": "Я дам ответ, который всем нравится: зависит. Точнее, зависит от того, когда спрашиваешь. Могу сказать, что мне нравится многое: серия игр Ace Attorney, фильмы Кубрика и Тарантино, чтение (почти) всего, что можно читать и т.д., но мне крайне сложно назвать конкретное произведение, в котором я был бы уверен, что оно моё любимое и останется любимым.<br><br>Впрочем, без сомнения могу сказать, что MLP: FiM — лучший мультсериал из когда-либо созданных.",
+	"faq-a7": "Я дам ответ, который всем нравится: зависит. Точнее, зависит от того, когда спрашивать. Могу сказать, что мне нравится многое: серия игр Ace Attorney, фильмы Кубрика и Тарантино, чтение (почти) всего, что можно читать и т.д., но мне крайне сложно назвать конкретное произведение, в котором я был бы уверен, что оно моё любимое и останется любимым.<br><br>Впрочем, без сомнения могу сказать, что MLP: FiM — лучший мультсериал из когда-либо созданных.",
 
 	"404-title": "Хм... здесь ничего нет.",
 	"404-text": "Страница, которую ты пытался посетить, не найдена!",
