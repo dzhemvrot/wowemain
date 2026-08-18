@@ -69,7 +69,12 @@ const translations = {
 	"faq-q6": "What's your long-term goal?",
 	"faq-a6": "I want to become a history teacher and work in my school; to have a big family, build a house and plant a garden. Pretty traditional, if you ask me. :D",
 	"faq-q7": "What's your favourite song/book/film/game/other piece of media?",
-	"faq-a7": "I will give an answer that everybody likes: it depends. More specifically, it depends on when you ask. I can say that I enjoy a lot of things: I like the Ace Attorney game series, enjoy watching Kubrik's and Tarantino's movies, like reading (almost) anything that could be read etc., but it is extremely hard for me to name a certain piece that I will be certain is my favourite and will stay favourite.<br><br>MLP: FiM is the best cartoon ever made, though."
+	"faq-a7": "I will give an answer that everybody likes: it depends. More specifically, it depends on when you ask. I can say that I enjoy a lot of things: I like the Ace Attorney game series, enjoy watching Kubrik's and Tarantino's movies, like reading (almost) anything that could be read etc., but it is extremely hard for me to name a certain piece that I will be certain is my favourite and will stay favourite.<br><br>MLP: FiM is the best cartoon ever made, though.",
+
+	"404-title": "Hm... nothing here.",
+	"404-text": "The page you tried to visit is not found!",
+	"404-credit": "Art Credit: TempestUwU on Reddit",
+	"404-return": "Return to Main Page"
   },
 
   lv: {
@@ -129,19 +134,24 @@ const translations = {
 	"FAQtitle": "F.A.Q.",
 
 	"faq-q1": "Kas tu esi?",
-	"faq-a1": "Neskatoties uz to, ko varētu izdomāt, es esmu cilvēks. Konkrēti, es esmu vīrietis vārdā Timurs Besarabs, 19 gadus vecs. Es dzimu 2007. gada 30. jūnijā plkst. 10:27 pēc Rīgas laika.",
+	"faq-a1": "Neskatoties uz to, kā tas varētu izskatīties, es esmu cilvēks. Konkrēti, es esmu vīrietis vārdā Timurs Besarabs, 19 gadus vecs. Es dzimu 2007. gada 30. jūnijā plkst. 10:27 pēc vietējā laika.",
 	"faq-q2": "No kurienes tu esi?",
 	"faq-a2": "Es esmu no Latvijas, Rīgas. Es arī dzīvoju šeit šobrīd un neplānoju pārcelties nekur citur.",
 	"faq-q3": "Kādas valstis tu esi apmeklējis?",
 	"faq-a3": "Es esmu apmeklējis Igauniju pāris reizes, Krieviju 2020. gadā, Zviedriju 2026. gadā. Es arī dzīvoju Ukrainā, kad biju mazs.",
 	"faq-q4": "Kāpēc tavā mājaslapā ir norādīts, ka tu esi ieguvis/iegūsti vidējo izglītību divreiz?",
-	"faq-a4": "Šis jautājums prasa savu lapu, ko es varbūt izveidošu vēlāk. Pagaidām īsi izklāstīšu skaidrojumu šeit:<br>1) Es biju diezgan depresīvs 10. klasē 2023.–2024. mācību gadā.<br>2) Es izstājos no skolas 2024. gada maijā, <i>nebeidzot</i> 10. klasi.<br>3) Es iestājos RVT (Rīgas Valsts Tehnikumā) nākamajam gadam, domādams, ka tas ir tas, ko gribu.<br>4) Mācību gada vidū sapratu, ka tas tomēr nav tas, ko gribu. Tāpēc izstājos (arī nebeidzot mācību gadu).<br>5) Pāris mēnešus vēlāk sāku strādāt McDonald's.<br>6) Kādā brīdī gribēju iegūt vidējo izglītību, tāpēc iestājos tiešsaites skolā. Tā kā es toreiz nebeidzu 10. klasi un arī 1. kursu koledžā, man nācās atkal iestāties 10. klasē.<br>7) Pēc aptuveni mēneša sapratu, ka tiešsaites skola bija vissliktākā līdz šim, tāpēc izstājos un sāku sarunas par atgriešanos savā skolā.<br>8) Oktobra beigās ieguvu vietu skolā, un pāris nedēļas vēlāk aizgāju no McD.<br><br>Aptuveni tā.",
+	"faq-a4": "Šis jautājums prasa savu lapu, ko es varbūt izveidošu vēlāk. Pagaidām īsi izklāstīšu skaidrojumu šeit:<br>1) Es biju diezgan depresīvs 10. klasē 2023.–2024. mācību gadā.<br>2) Es izstājos no skolas 2024. gada maijā, <i>nebeidzot</i> 10. klasi.<br>3) Es iestājos RVT (Rīgas Valsts Tehnikumā) nākamajam gadam, domādams, ka tas ir tas, ko gribu.<br>4) Mācību gada vidū sapratu, ka tas tomēr nav tas, ko gribu. Tāpēc izstājos (acīmredzami nebeidzot mācību gadu).<br>5) Pāris mēnešus vēlāk sāku strādāt McDonald's.<br>6) Kādā brīdī gribēju iegūt vidējo izglītību, tāpēc iestājos online skolā. Tā kā es toreiz nebeidzu 10. klasi un arī 1. kursu koledžā, man nācās atkal iestāties 10. klasē.<br>7) Pēc aptuveni mēneša sapratu, ka online skola bija vissliktākā līdz šim, tāpēc izstājos un sāku sarunas par atgriešanos savā skolā.<br>8) Oktobra beigās ieguvu vietu skolā, un pāris nedēļas vēlāk aizgāju no McD.<br><br>Aptuveni tā.",
 	"faq-q5": "Kā ar tevi sazināties?",
-	"faq-a5": "Ja tas nav steidzami, vari izmantot jebkuras sociālo tīklu saites, kas man ir galvenajā lapā. Ņemiet vērā, ka es parasti nelietoju sociālos tīklus. Telegram un Discord lietoju vairāk.<br>Ja tas ir kaut kas nopietnāks, lūdzu, sazināties ar mani caur e-pastu, kas norādīts lejā. Atgādinājumi citās platformās arī ir labi.",
+	"faq-a5": "Ja tas nav steidzami, vari izmantot jebkuras sociālo tīklu saites, kas man ir galvenajā lapā. Ņem vērā, ka es parasti nelietoju sociālos tīklus. Telegram un Discord lietoju nedaudz.<br>Ja tas ir kaut kas nopietnāks, lūdzu, sazinies ar mani caur e-pastu, kas norādīts kājenē. Atgādinājumi citās platformās arī ir labi.",
 	"faq-q6": "Kāds ir tavs ilgtermiņa mērķis?",
-	"faq-a6": "Es gribu kļūt par vēstures skolotāju un strādāt savā skolā; izveidot lielu ģimeni, uzcelt māju un iestādīt dārzu. Diezgan tradicionāli, vai nē? :D",
+	"faq-a6": "Es gribu kļūt par vēstures skolotāju un strādāt savā skolā; izveidot lielu ģimeni, uzcelt māju un iestādīt dārzu. Diezgan tradicionāli, ja jautā man. :D",
 	"faq-q7": "Kāda ir tava mīļākā dziesma/grāmata/filma/spēle/cits medijs?",
-	"faq-a7": "Es došu atbildi, kas visiem patīk: tas ir atkarīgs. Precīzāk, atkarīgs no tā, kad jautā. Es varu teikt, ka man patīk daudz kas: Ace Attorney spēļu sērija, Kubrika un Tarantīno filmas, lasīšana (gandrīz) jebkā, ko var lasīt u.c., bet man ārkārtīgi grūti nosaukt konkrētu darbu, par kuru es būtu pārliecināts, ka tas ir mans mīļākais un tāds arī paliks.<br><br>MLP: FiM tomēr ir labākā multene, kāds jebkad radīts."
+	"faq-a7": "Es došu atbildi, kas visiem patīk: tas atkarīgs. Precīzāk, atkarīgs no tā, kad jautā. Es varu teikt, ka man patīk daudz kas: Ace Attorney spēļu sērija, Kubrika un Tarantīno filmas, lasīšana (gandrīz) jebkā, ko var lasīt u.c., bet man ārkārtīgi grūti nosaukt konkrētu darbu, par kuru es būtu pārliecināts, ka tas ir mans mīļākais un tāds arī paliks.<br><br>MLP: FiM tomēr ir labākā animācijas seriāls, kāds jebkad radīts.",
+
+	"404-title": "Hm... šeit nekā nav.",
+	"404-text": "Lapa, kuru mēģināji apmeklēt, netika atrasta!",
+	"404-credit": "Mākslas kredīts: TempestUwU Redditā",
+	"404-return": "Atgriezties uz galveno lapu"
   },
 
   ru: {
@@ -198,22 +208,27 @@ const translations = {
     "footer-license": "Все материалы на этом домене, включая поддомены, распространяются по лицензии <a href=\"https://creativecommons.org/licenses/by-sa/4.0/\" target=\"_blank\" class=\"text-reset\">CC BY-SA 4.0</a>, если не указано иное.",
     "footer-contact": "E-mail для связи: <a href=\"mailto:tbesarabs@gmail.com\" class=\"text-reset\">tbesarabs@gmail.com</a>",
 	
-	"FAQtitle": "ЧАВО",
+	"FAQtitle": "F.A.Q.",
 
 	"faq-q1": "Кто ты?",
-	"faq-a1": "Вне зависимости от того, что может показаться, я человек. Конкретно, я мужчина по имени Тимур Бесараб, мне 19 лет. Я родился 30 июня 2007 года в 10:27 по местному времени.",
+	"faq-a1": "Несмотря на то, как это может выглядеть, я человек. Конкретно, я мужчина по имени Тимур Бесараб, мне 19 лет. Я родился 30 июня 2007 года в 10:27 по местному времени.",
 	"faq-q2": "Откуда ты?",
 	"faq-a2": "Я из Латвии, из Риги. Я также живу здесь сейчас и не планирую никуда переезжать.",
 	"faq-q3": "В каких странах ты бывал?",
 	"faq-a3": "Я несколько раз был в Эстонии, в России в 2020 году, в Швеции в 2026 году. Также я жил в Украине, когда был маленьким.",
 	"faq-q4": "Почему на твоём сайте указано, что ты получил/получаешь среднее образование дважды?",
-	"faq-a4": "Этот вопрос заслуживает отдельной страницы, которую я, возможно, сделаю позже. Пока кратко изложу объяснение здесь:<br>1) Я был довольно сильно в депрессии в 10-м классе в 2023–2024 учебном году.<br>2) Я ушёл из школы в мае 2024 года, <i>не закончив</i> 10-й класс.<br>3) Я поступил в RVT (Рижский государственный техникум) на следующий год, думая, что это то, что я хочу.<br>4) В середине учебного года понял, что на самом деле это не то, что я хочу. Поэтому я ушёл (очевидно, не закончив учебный год).<br>5) Через несколько месяцев начал работать в McDonald's.<br>6) В какой-то момент захотел получить среднее образование, поэтому поступил в онлайн-школу. Поскольку я тогда не закончил 10-й класс и 1-й курс в техникуме, мне пришлось снова поступать в 10-й класс.<br>7) Примерно через месяц понял, что онлайн-школа была самой плохой по качеству обучения, поэтому ушёл оттуда и начал переговоры о возвращении в свою школу.<br>8) В конце октября получил место в школе, а через несколько недель ушёл с работы в McD.<br><br>Примерно так.",
+	"faq-a4": "Этот вопрос заслуживает отдельной страницы, которую я, возможно, сделаю позже. Пока кратко изложу объяснение здесь:<br>1) Я был довольно сильно в депрессии в 10-м классе в 2023–2024 учебном году.<br>2) Я бросил школу в мае 2024 года, <i>не закончив</i> 10-й класс.<br>3) Я поступил в RVT (Рижский государственный техникум) на следующий год, думая, что это то, что я хочу.<br>4) В середине учебного года понял, что на самом деле это не то, что я хочу. Поэтому бросил (очевидно, не закончив учебный год).<br>5) Через несколько месяцев начал работать в McDonald's.<br>6) В какой-то момент захотел получить среднее образование, поэтому поступил в онлайн-школу. Поскольку я тогда не закончил 10-й класс и 1-й курс в техникуме, мне пришлось снова поступать в 10-й класс.<br>7) Примерно через месяц понял, что онлайн-школа была самой плохой на данный момент, поэтому бросил и начал переговоры о возвращении в свою школу.<br>8) В конце октября получил место в школе, а через несколько недель ушёл с работы в McD.<br><br>Примерно так.",
 	"faq-q5": "Как со мной связаться?",
-	"faq-a5": "Если это что-то несрочное, можно использовать любые ссылки на соцсети с главной страницы. Учтите, что я обычно почти не пользуюсь соцсетями. Telegram и Discord использую чаще.<br>Если это что-то более серьёзное, пожалуйста, связывайтесь со мной через e-mail, указанный внизу сайта. Можете также просить проверить почту на других платформах.",
-	"faq-q6": "Какие у тебя цели/планы на жизнь?",
-	"faq-a6": "Я хочу стать учителем истории и работать в своей школе; завести большую семью, построить дом и посадить сад. Довольно традиционно, мне кажется. :D",
+	"faq-a5": "Если это что-то несрочное, можно использовать любые ссылки на соцсети с главной страницы. Учти, что я обычно почти не пользуюсь соцсетями. Telegram и Discord использую немного.<br>Если это что-то более серьёзное, пожалуйста, свяжись со мной через e-mail, указанный в подвале сайта. Напоминания на других платформах тоже нормально.",
+	"faq-q6": "Какая у тебя долгосрочная цель?",
+	"faq-a6": "Я хочу стать учителем истории и работать в своей школе; завести большую семью, построить дом и посадить сад. Довольно традиционно, если спросить меня. :D",
 	"faq-q7": "Какая твоя любимая песня/книга/фильм/игра/другое произведение?",
-	"faq-a7": "Я дам ответ, который всем нравится: это зависит. Конкретнее, зависит от того, когда спрашивать. Могу сказать, что мне нравится многое: серия игр Ace Attorney, фильмы Кубрика и Тарантино, чтение (почти) всего, что можно прочитать и т.д., но мне крайне сложно назвать конкретное произведение, в котором я был бы уверен, что оно моё любимое и останется любимым.<br><br>Впрочем, MLP: FiM — лучший мультсериал из когда-либо созданных."
+	"faq-a7": "Я дам ответ, который всем нравится: зависит. Точнее, зависит от того, когда спрашиваешь. Могу сказать, что мне нравится многое: серия игр Ace Attorney, фильмы Кубрика и Тарантино, чтение (почти) всего, что можно читать и т.д., но мне крайне сложно назвать конкретное произведение, в котором я был бы уверен, что оно моё любимое и останется любимым.<br><br>MLP: FiM — лучший мультсериал из когда-либо созданных, впрочем.",
+
+	"404-title": "Хм... здесь ничего нет.",
+	"404-text": "Страница, которую ты пытался посетить, не найдена!",
+	"404-credit": "Автор арта: TempestUwU на Reddit",
+	"404-return": "Вернуться на главную"
   }
 };
 

@@ -1,28 +1,72 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>wowemain's page - Not found</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-	<link rel="stylesheet" type="text/css" href="https://wowe-main.eu/style.css">
-  </head>
-    
-	<body>
-		<div class="row p-4 justify-content-center">
-		<h1>Hm... nothing here.</h1>
-		<p>The page you tried to visit is not found!</p>
-			<div class="col justify-content-center d-none d-lg-block"></div>
-			<div class="col justify-content-center"><div class="card">
-				<img src="https://wowe-main.eu/images/404.png" class="rounded img-fluid"><figcaption class="figure-caption">
-				<div class="card-body">
-				  <p class="card-text">Art Credit: TempestUwU on Reddit</p>
-				  <a href="https://wowe-main.eu/" class="btn btn-primary">Return to Main Page</a>
-				</div>
-			  </div>
-			</div>
-			<div class="col justify-content-center d-none d-lg-block"></div>
-		</div>
-		<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
-	</body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="keywords" content="wowemain, dzhemvrot, timurs, timurs latvia">
+  <meta name="language" content="en, ru, lv">
+  <meta name='date' content='Aug. 18, 2026'>
+  
+  <meta content="wowemain's page - Not found" property="og:title" />
+  <meta content="The page you tried to visit is not found." property="og:description" />
+  <meta content="https://wowe-main.eu/404" property="og:url" />
+  <meta content="https://wowe-main.eu/images/404.png" property="og:image" />
+  <meta content="#841414" data-react-helmet="true" name="theme-color" />
+  
+  <title>wowemain's page - Not found</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+
+<body>
+  <nav class="navbar sticky-top navbar-expand-lg bg-body-tertiary">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="index.html">wowemain's page</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+        <div class="navbar-nav">
+          <a class="nav-link active lang-btn" href="" data-lang="en">EN</a>
+          <a class="nav-link lang-btn" href="" data-lang="lv">LV</a>
+          <a class="nav-link lang-btn" href="" data-lang="ru">RU</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="row p-4 justify-content-center">
+    <div class="col-lg-6 col-md-8 col-12">
+      <div class="card text-center">
+        <img src="images/404.png" class="rounded img-fluid" alt="404 illustration">
+        <div class="card-body">
+          <h1 class="card-title" data-key="404-title">Hm... nothing here.</h1>
+          <p class="card-text" data-key="404-text">The page you tried to visit is not found!</p>
+          <p class="text-muted small" data-key="404-credit">Art Credit: TempestUwU on Reddit</p>
+          <a href="index.html" class="btn btn-primary" data-key="404-return">Return to Main Page</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Footer -->
+  <footer class="bg-body-tertiary py-4 mt-5 border-top">
+    <div class="container text-center text-muted small">
+      <p class="mb-1" data-key="footer-author">
+        Page author: Timurs Besarabs, 2025–2026
+      </p>
+      <p class="mb-1" data-key="footer-license">
+        All material on this domain, including subdomains, is licensed under 
+        <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" class="text-reset">CC BY-SA 4.0</a>, 
+        unless stated otherwise.
+      </p>
+      <p class="mb-0" data-key="footer-contact">
+        Contact e-mail: 
+        <a href="mailto:tbesarabs@gmail.com" class="text-reset">tbesarabs@gmail.com</a>
+      </p>
+    </div>
+  </footer>
+  <script src="script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+</body>
 </html>
