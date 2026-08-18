@@ -12,6 +12,7 @@ const translations = {
 	"title-edu": "Education",
     "title-languages": "Languages",
     "title-countdowns": "Countdowns",
+	"title-otherpages": "Other pages",
     "ru-level": "Русский — мой родной язык.",
     "en-level": "I have advanced knowledge of English.",
     "lv-level": "Es latviešu valodu protu vidējā līmenī.",
@@ -31,6 +32,8 @@ const translations = {
     "facebook": "My Facebook",
     "discord": "My Discord server",
 	"telegram": "My Telegram",
+	
+	"FAQlink": "F.A.Q. page",
 
     "wushuwork": "Sports coach at Wushu school ''Wulin''",
 	"mcdwork": "McDonald's crew member at McDonald's Underground",
@@ -49,7 +52,9 @@ const translations = {
 	
 	"footer-author": "Page author: Timurs Besarabs, 2025–2026",
     "footer-license": "All material on this domain, including subdomains, is licensed under <a href=\"https://creativecommons.org/licenses/by-sa/4.0/\" target=\"_blank\" class=\"text-reset\">CC BY-SA 4.0</a>, unless stated otherwise.",
-    "footer-contact": "Contact e-mail: <a href=\"mailto:tbesarabs@gmail.com\" class=\"text-reset\">tbesarabs@gmail.com</a>"
+    "footer-contact": "Contact e-mail: <a href=\"mailto:tbesarabs@gmail.com\" class=\"text-reset\">tbesarabs@gmail.com</a>",
+	
+	"FAQtitle": "F.A.Q."
   },
 
   lv: {
@@ -64,6 +69,7 @@ const translations = {
 	"title-edu": "Izglitība",
     "title-languages": "Valodas",
     "title-countdowns": "Atpakaļskaitīšana",
+	"title-otherpages": "Citas lapas",
     "ru-level": "Русский — мой родной язык.",
     "en-level": "I have advanced knowledge of English.",
     "lv-level": "Es latviešu valodu protu vidējā līmenī.",
@@ -84,6 +90,8 @@ const translations = {
     "discord": "Mans Discord serveris",
 	"telegram": "Mans Telegram",
 
+	"FAQlink": "F.A.Q.",
+	
     "wushuwork": "Sporta treneris u-šu skolā ''Wulin''",
 	"mcdwork": "Darbinieks McDonald's Underground restorānā",
 	"bestworkernote": "<i>Piezīme: 2025. gada aprīļa mēneša labākais darbinieks!</i>",
@@ -101,7 +109,9 @@ const translations = {
 	
 	"footer-author": "Lapas autors: Timurs Besarabs, 2025–2026",
     "footer-license": "Visi materiāli šajā domēnā, ieskaitot apakšdomēnus, ir licencēti saskaņā ar <a href=\"https://creativecommons.org/licenses/by-sa/4.0/\" target=\"_blank\" class=\"text-reset\">CC BY-SA 4.0</a>, ja nav norādīts citādi.",
-    "footer-contact": "Kontakta e-pasts: <a href=\"mailto:tbesarabs@gmail.com\" class=\"text-reset\">tbesarabs@gmail.com</a>"
+    "footer-contact": "Kontakta e-pasts: <a href=\"mailto:tbesarabs@gmail.com\" class=\"text-reset\">tbesarabs@gmail.com</a>",
+	
+	"FAQtitle": "F.A.Q."
   },
 
   ru: {
@@ -116,6 +126,7 @@ const translations = {
 	"title-edu": "Образование",
     "title-languages": "Языки",
     "title-countdowns": "Обратные отсчёты",
+	"title-otherpages": "Другие страницы",
     "ru-level": "Русский — мой родной язык.",
     "en-level": "I have advanced knowledge of English.",
     "lv-level": "Es latviešu valodu protu vidējā līmenī.",
@@ -136,6 +147,8 @@ const translations = {
     "discord": "Мой Discord-сервер",
 	"telegram": "Мой Telegram",
 
+	"FAQlink": "ЧАсто задаваемые ВОпросы",
+	
     "wushuwork": "Тренер в школе ушу ''Улинь''",
 	"mcdwork": "Работник в ресторане McDonald's Underground",
 	"bestworkernote": "<i>Примечание: лучший сотрудник месяца в апреле 2025 года!</i>",
@@ -153,7 +166,9 @@ const translations = {
 	
 	"footer-author": "Автор страницы: Тимур Бесараб, 2025–2026",
     "footer-license": "Все материалы на этом домене, включая поддомены, распространяются по лицензии <a href=\"https://creativecommons.org/licenses/by-sa/4.0/\" target=\"_blank\" class=\"text-reset\">CC BY-SA 4.0</a>, если не указано иное.",
-    "footer-contact": "E-mail для связи: <a href=\"mailto:tbesarabs@gmail.com\" class=\"text-reset\">tbesarabs@gmail.com</a>"
+    "footer-contact": "E-mail для связи: <a href=\"mailto:tbesarabs@gmail.com\" class=\"text-reset\">tbesarabs@gmail.com</a>",
+	
+	"FAQtitle": "F.A.Q."
   }
 };
 
