@@ -236,6 +236,7 @@ let currentLang = 'en';
 
 function changeLanguage(lang) {
   currentLang = lang;
+  localStorage.setItem('lang', lang);
 
   // Update active button
   document.querySelectorAll('.lang-btn').forEach(btn => {
@@ -332,17 +333,6 @@ function currentAge() {
 // ==================== INITIALIZE ====================
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Set countdowns (only if elements exist on the page)
-  const setIfExists = (id, value) => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = value;
-  };
-  setIfExists("summerCountdown", daysUntilSummer());
-  setIfExists("BDayCountdown", daysUntilBDay());
-  setIfExists("summerCountdownMobile", daysUntilSummer());
-  setIfExists("BDayCountdownMobile", daysUntilBDay());
-  setIfExists("AgeCounter", currentAge());
-
   // Language switcher
   document.querySelectorAll('.lang-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -351,6 +341,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Set default language
-  changeLanguage('en');
+  // Load saved language (or default to English)
+  const savedLang = localStorage.getItem('lang');
+  const initialLang = (savedLang && translations[savedLang]) ? savedLang : 'en';
+  changeLanguage(initialLang);
 });
