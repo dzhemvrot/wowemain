@@ -330,10 +330,67 @@ function currentAge() {
   return returntext;
 }
 
+// ==================== NAVBAR LOADER ====================
+
+const NAVBAR_HTML = `
+<nav class="navbar sticky-top navbar-expand-lg bg-body-tertiary">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="index.html">wowemain's page</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+      <div class="navbar-nav">
+        <a class="nav-link lang-btn" href="" data-lang="en">EN</a>
+        <a class="nav-link lang-btn" href="" data-lang="lv">LV</a>
+        <a class="nav-link lang-btn" href="" data-lang="ru">RU</a>
+      </div>
+    </div>
+  </div>
+</nav>
+`;
+
+function loadNavbar() {
+  const placeholder = document.getElementById('site-navbar');
+  if (!placeholder) return;
+  placeholder.innerHTML = NAVBAR_HTML;
+}
+
+// ==================== FOOTER LOADER ====================
+
+const FOOTER_HTML = `
+<footer class="bg-body-tertiary py-4 mt-5 border-top">
+  <div class="container text-center text-muted small">
+    <p class="mb-1" data-key="footer-author">
+      Page author: Timurs Besarabs, 2025–2026
+    </p>
+    <p class="mb-1" data-key="footer-license">
+      All material on this domain, including subdomains, is licensed under 
+      <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" class="text-reset">CC BY-SA 4.0</a>, 
+      unless stated otherwise.
+    </p>
+    <p class="mb-0" data-key="footer-contact">
+      Contact e-mail: 
+      <a href="mailto:tbesarabs@gmail.com" class="text-reset">tbesarabs@gmail.com</a>
+    </p>
+  </div>
+</footer>
+`;
+
+function loadFooter() {
+  const placeholder = document.getElementById('site-footer');
+  if (!placeholder) return;
+  placeholder.innerHTML = FOOTER_HTML;
+}
+
 // ==================== INITIALIZE ====================
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Language switcher
+  // Load shared navbar and footer first
+  loadNavbar();
+  loadFooter();
+
+  // Language switcher (must be after navbar is loaded)
   document.querySelectorAll('.lang-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -341,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Load saved language (or default to English)
+  // Apply saved language (or default to English)
   const savedLang = localStorage.getItem('lang');
   const initialLang = (savedLang && translations[savedLang]) ? savedLang : 'en';
   changeLanguage(initialLang);
