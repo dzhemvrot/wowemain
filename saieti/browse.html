@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="lv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Spēļu katalogs – visi ledlauži, komandas veidošana, energizers un citas aktivitātes">
+  <title>Spēļu katalogs</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+  <div class="container py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+      <h1 class="mb-0" id="page-title">Spēļu katalogs</h1>
+      <div class="d-flex align-items-center gap-2">
+        <a href="games.html" class="btn btn-outline-primary btn-sm" id="link-random">🎲 Ģenerators</a>
+        <div class="btn-group" role="group" aria-label="Language">
+          <button type="button" class="btn btn-outline-dark btn-sm lang-btn active" data-lang="lv" id="btn-lv">LV</button>
+          <button type="button" class="btn btn-outline-dark btn-sm lang-btn" data-lang="ru" id="btn-ru">RU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category selection -->
+    <div id="category-view">
+      <p class="lead mb-4" id="choose-text">Izvēlies kategoriju:</p>
+      <div class="row g-3 justify-content-center" id="category-grid">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <!-- Games list view -->
+    <div id="list-view" class="d-none">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h2 class="mb-0 fs-4" id="list-category-title"></h2>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-back">← Atpakaļ</button>
+      </div>
+      <p class="text-muted small mb-3" id="list-count"></p>
+      <div class="row g-3" id="games-list">
+        <!-- filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <script src="games-data.js"></script>
+  <script src="browse.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+</body>
+</html>

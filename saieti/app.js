@@ -19,7 +19,8 @@ const STR = {
     back: '← Atpakaļ',
     reshuffle: '🔄 Jauna spēle',
     empty: 'Šajā kategorijā pagaidām nav spēļu.',
-    inCategory: 'Kategorija: '
+    inCategory: 'Kategorija: ',
+    linkBrowse: '📋 Katalogs'
   },
   ru: {
     pageTitle: 'Генератор игр',
@@ -30,7 +31,8 @@ const STR = {
     back: '← Назад',
     reshuffle: '🔄 Новая игра',
     empty: 'В этой категории пока нет игр.',
-    inCategory: 'Категория: '
+    inCategory: 'Категория: ',
+    linkBrowse: '📋 Каталог'
   }
 };
 
@@ -58,6 +60,8 @@ function applyLanguage() {
   document.getElementById('btn-reshuffle').textContent = t('reshuffle');
   document.getElementById('empty-text').textContent = t('empty');
   document.getElementById('btn-empty-back').textContent = t('back');
+  const linkBrowse = document.getElementById('link-browse');
+  if (linkBrowse) linkBrowse.textContent = t('linkBrowse');
   document.getElementById('btn-lv').classList.toggle('active', lang === 'lv');
   document.getElementById('btn-ru').classList.toggle('active', lang === 'ru');
   document.documentElement.lang = lang;

@@ -241,3 +241,10 @@ blockquote p {
 .btn-action {
   min-width: 140px;
 }
+
+.game-card {
+  transition: box-shadow 0.15s ease;
+}
+.game-card:hover {
+  box-shadow: 0 0.35rem 0.85rem rgba(0,0,0,.12);
+}
