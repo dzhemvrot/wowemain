@@ -1,7 +1,7 @@
-// Category metadata (keys match GAMES) – same as app.js
+// Category metadata (keys match GAMES)
 const CATEGORIES = [
-  { key: 'icebreakers',   lv: 'Ledlauži (Icebreakers)',     ru: 'Ледоколы (Icebreakers)' },
-  { key: 'teambuilding',  lv: 'Komandas veidošana',         ru: 'Тимбилдинг' },
+  { key: 'icebreakers',   lv: 'Icebreakers',     ru: 'Icebreakers' },
+  { key: 'teambuilding',  lv: 'Komandas veidošana (Teambuilding)',         ru: 'Тимбилдинг' },
   { key: 'physical',      lv: 'Fiziskie energizers',        ru: 'Физические энерджайзеры' },
   { key: 'mental',        lv: 'Mentālie energizers',        ru: 'Ментальные энерджайзеры' },
   { key: 'creative',      lv: 'Radošās spēles',             ru: 'Креативные игры' },
