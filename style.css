@@ -198,5 +198,53 @@ blockquote p {
   }
 }
 
+.category-card {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-height: 140px;
+}
+.category-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+}
+.category-card .card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+.lang-btn.active {
+  font-weight: bold;
+  text-decoration: underline;
+}
+#game-view .card {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1rem;
+}
+.meta-item {
+  font-size: 0.95rem;
+}
+.meta-item strong {
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #666;
+}
+.btn-action {
+  min-width: 140px;
+}
 
-
+.game-card {
+  transition: box-shadow 0.15s ease;
+}
+.game-card:hover {
+  box-shadow: 0 0.35rem 0.85rem rgba(0,0,0,.12);
+}
