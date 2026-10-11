@@ -83,3 +83,55 @@ function setActiveLangButtons(lang) {
   });
   document.documentElement.lang = lang;
 }
+
+/** Normalize game.images / game.image to a string array of non-empty paths/URLs. */
+function getGameImages(game) {
+  if (!game) return [];
+  let raw = game.images != null ? game.images : game.image;
+  if (raw == null || raw === '') return [];
+  if (typeof raw === 'string') raw = [raw];
+  if (!Array.isArray(raw)) return [];
+  return raw.map(s => String(s).trim()).filter(Boolean);
+}
+
+/**
+ * Build HTML for game image gallery.
+ * @param {object} game
+ * @param {{ alt?: string, className?: string }} [opts]
+ * @returns {string} HTML (empty string if no images)
+ */
+function renderGameImagesHtml(game, opts = {}) {
+  const imgs = getGameImages(game);
+  if (imgs.length === 0) return '';
+  const alt = opts.alt || '';
+  const extraClass = opts.className ? ` ${opts.className}` : '';
+  const figures = imgs.map((src, i) => {
+    const safeSrc = String(src)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const safeAlt = String(alt || `Image ${i + 1}`)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return `<figure class="game-image-item mb-0">
+      <img src="${safeSrc}" alt="${safeAlt}" class="game-image img-fluid rounded" loading="lazy" decoding="async">
+    </figure>`;
+  }).join('');
+  return `<div class="game-images${extraClass}">${figures}</div>`;
+}
+
+/** Fill a container element with game images (clears if none). */
+function fillGameImages(container, game, opts = {}) {
+  if (!container) return;
+  const html = renderGameImagesHtml(game, opts);
+  if (!html) {
+    container.innerHTML = '';
+    container.classList.add('d-none');
+    return;
+  }
+  container.innerHTML = html;
+  container.classList.remove('d-none');
+}

@@ -106,11 +106,13 @@ function pickRandomGame() {
 }
 
 function showGame(game, updateLabel) {
-  document.getElementById('game-title').textContent = splitTitle(game.title, lang);
+  const title = splitTitle(game.title, lang);
+  document.getElementById('game-title').textContent = title;
   document.getElementById('game-people').textContent = game.people || '—';
   document.getElementById('game-duration').textContent = game.duration || '—';
   document.getElementById('game-materials').textContent = game.materials || '—';
   document.getElementById('game-desc').textContent = (lang === 'ru' ? game.desc_ru : game.desc_lv) || '—';
+  fillGameImages(document.getElementById('game-images'), game, { alt: title });
   if (updateLabel) {
     const cat = CATEGORIES.find(c => c.key === currentCategory);
     document.getElementById('category-label').textContent =

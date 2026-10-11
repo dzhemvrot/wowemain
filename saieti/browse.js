@@ -98,15 +98,17 @@ function buildGameCard(game, options = {}) {
   const col = document.createElement('div');
   col.className = 'col-12';
   const desc = (lang === 'ru' ? game.desc_ru : game.desc_lv) || '—';
+  const title = splitTitle(game.title, lang);
   const catLabel = options.category
     ? `<div class="text-muted small mb-2">${t('inCategory')}${categoryName(options.category, lang)}</div>`
     : '';
+  const imagesHtml = renderGameImagesHtml(game, { alt: title, className: 'mt-3' });
 
   col.innerHTML = `
     <div class="card shadow-sm game-card">
       <div class="card-body p-3 p-md-4">
         ${catLabel}
-        <h3 class="card-title h5 mb-3">${splitTitle(game.title, lang)}</h3>
+        <h3 class="card-title h5 mb-3">${title}</h3>
         <div class="meta-row">
           <div class="meta-item">
             <strong>${t('people')}</strong>
@@ -123,6 +125,7 @@ function buildGameCard(game, options = {}) {
         </div>
         <hr class="my-3">
         <p class="card-text mb-0 game-desc">${escapeHtml(desc)}</p>
+        ${imagesHtml}
       </div>
     </div>`;
   return col;

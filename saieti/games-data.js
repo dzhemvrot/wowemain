@@ -7,8 +7,11 @@
 //   duration: "15 – 30 min.",
 //   materials: "papīrs, marķieri",
 //   desc_lv: "Latviešu apraksts",
-//   desc_ru: "Русское описание"
+//   desc_ru: "Русское описание",
+//   images: ["images/example.jpg"]   // optional — one path, or an array of paths/URLs
 // }
+// Images: put files in saieti/images/ and reference as "images/filename.jpg"
+//         or use a full URL (https://...). Paths are relative to the saieti pages.
 // To add a game: push an object into the corresponding array.
 // To delete: remove the object from the array.
 // ============================================================
@@ -314,7 +317,8 @@ const GAMES = {
       "duration": "25 – 45 min.",
       "materials": "sagatavoti puzles gabaliņi (kartona kvadrāti)",
       "desc_lv": "Katrai piecu cilvēku grupai tiek izsniegtas aploksnes ar dažādas formas kartona gabaliņiem. Grupas uzdevums ir izveidot piecus vienāda izmēra kvadrātus tā, lai katra grupas dalībnieka priekšā uz galda būtu pilnīgs kvadrāts. Noteikumi: neviens nedrīkst runāt, neviens nedrīkst lūgt citai personai gabaliņu vai signalizēt. Ikviena persona, ja vēlas, var novietot gabaliņus galda centrā vai dot gabaliņus jebkuram citam. Nevienam nav atļauts iejaukties citas personas figūrā.",
-      "desc_ru": "Группам по пять человек раздаются конверты с кусочками картона разной формы. Задача группы — составить пять квадратов одинакового размера так, чтобы перед каждым членом группы лежал готовый квадрат. Правила: никто не имеет права говорить, никто не может просить у другого человека кусочек или подавать сигналы. Каждый может класть кусочки в центр стола или отдавать их другому. Нельзя вмешиваться в фигуру другого."
+      "desc_ru": "Группам по пять человек раздаются конверты с кусочками картона разной формы. Задача группы — составить пять квадратов одинакового размера так, чтобы перед каждым членом группы лежал готовый квадрат. Правила: никто не имеет права говорить, никто не может просить у другого человека кусочек или подавать сигналы. Каждый может класть кусочки в центр стола или отдавать их другому. Нельзя вмешиваться в фигуру другого.",
+	  "images": ["images/perfectsquares.png"]
     },
     {
       "title": "Birthday Game / День рождения",
