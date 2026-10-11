@@ -3,12 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Spēļu ģenerators – ledlauži, komandas veidošana, energizers un citas aktivitātes">
+  <meta name="description" content="Radošie saieti - spēļu ģenerators">
+  <meta name="theme-color" content="#841414">
   <title>Spēļu ģenerators</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
   <link rel="stylesheet" type="text/css" href="../style.css">
 </head>
 <body>
+
   <div class="container py-4">
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
@@ -16,8 +18,8 @@
       <div class="d-flex align-items-center gap-2">
         <a href="browse.html" class="btn btn-outline-primary btn-sm" id="link-browse">📋 Katalogs</a>
         <div class="btn-group" role="group" aria-label="Language">
-          <button type="button" class="btn btn-outline-dark btn-sm lang-btn active" data-lang="lv" id="btn-lv">LV</button>
-          <button type="button" class="btn btn-outline-dark btn-sm lang-btn" data-lang="ru" id="btn-ru">RU</button>
+          <button type="button" class="btn btn-outline-dark btn-sm lang-btn active" data-lang="lv" id="btn-lv" aria-pressed="true">LV</button>
+          <button type="button" class="btn btn-outline-dark btn-sm lang-btn" data-lang="ru" id="btn-ru" aria-pressed="false">RU</button>
         </div>
       </div>
     </div>
@@ -53,7 +55,7 @@
           <p class="card-text" id="game-desc" style="white-space: pre-wrap;"></p>
           <div class="d-flex flex-wrap gap-2 mt-4">
             <button type="button" class="btn btn-outline-secondary btn-action" id="btn-back">← Atpakaļ</button>
-            <button type="button" class="btn btn-primary btn-action" id="btn-reshuffle">🔄 Jauna spēle</button>
+            <button type="button" class="btn btn-primary btn-action" id="btn-reshuffle" title="R / Shift+R">🔄 Jauna spēle</button>
           </div>
         </div>
       </div>
@@ -70,9 +72,11 @@
       </div>
     </div>
   </div>
+
   <div id="site-footer"></div>
   <script src="../script.js"></script>
   <script src="games-data.js"></script>
+  <script src="common.js"></script>
   <script src="app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
 </body>

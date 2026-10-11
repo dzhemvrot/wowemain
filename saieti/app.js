@@ -1,14 +1,5 @@
-// Category metadata (keys match GAMES)
-const CATEGORIES = [
-  { key: 'icebreakers',   lv: 'Icebreakers',     ru: 'Icebreakers' },
-  { key: 'teambuilding',  lv: 'Komandas veidošana (Teambuilding)',         ru: 'Тимбилдинг' },
-  { key: 'physical',      lv: 'Fiziskie energizers',        ru: 'Физические энерджайзеры' },
-  { key: 'mental',        lv: 'Mentālie energizers',        ru: 'Ментальные энерджайзеры' },
-  { key: 'creative',      lv: 'Radošās spēles',             ru: 'Креативные игры' },
-  { key: 'brainstorm',    lv: 'Prāta vētra (Brainstorm)',   ru: 'Мозговой штурм (Brainstorm)' }
-];
+// Generator
 
-// UI strings
 const STR = {
   lv: {
     pageTitle: 'Spēļu ģenerators',
@@ -36,18 +27,14 @@ const STR = {
   }
 };
 
-let lang = 'lv';
+let lang = getSavedLang();
 let currentCategory = null;
 let currentGameIndex = -1;
+/** Recent indices per category to avoid immediate repeats */
+const recentByCategory = {};
 
 function t(key) {
   return STR[lang][key] || key;
-}
-
-function splitTitle(title) {
-  const parts = title.split(' / ');
-  if (lang === 'ru' && parts.length > 1) return parts[1].trim();
-  return parts[0].trim();
 }
 
 function applyLanguage() {
@@ -62,32 +49,16 @@ function applyLanguage() {
   document.getElementById('btn-empty-back').textContent = t('back');
   const linkBrowse = document.getElementById('link-browse');
   if (linkBrowse) linkBrowse.textContent = t('linkBrowse');
-  document.getElementById('btn-lv').classList.toggle('active', lang === 'lv');
-  document.getElementById('btn-ru').classList.toggle('active', lang === 'ru');
-  document.documentElement.lang = lang;
-  renderCategories();
-  if (currentCategory && currentGameIndex >= 0) {
-    showGame(GAMES[currentCategory][currentGameIndex], false);
-  }
-}
-
-function renderCategories() {
-  const grid = document.getElementById('category-grid');
-  grid.innerHTML = '';
-  CATEGORIES.forEach(cat => {
-    const count = (GAMES[cat.key] || []).length;
-    const col = document.createElement('div');
-    col.className = 'col-6 col-md-4 col-lg-3';
-    col.innerHTML = `
-      <div class="card category-card h-100" data-key="${cat.key}">
-        <div class="card-body">
-          <h5 class="card-title mb-1">${lang === 'ru' ? cat.ru : cat.lv}</h5>
-          <small class="text-muted">${count} ${lang === 'ru' ? 'игр' : 'spēles'}</small>
-        </div>
-      </div>`;
-    col.querySelector('.category-card').addEventListener('click', () => selectCategory(cat.key));
-    grid.appendChild(col);
+  setActiveLangButtons(lang);
+  renderCategoryGrid({
+    hideEmpty: true,
+    lang,
+    onSelect: selectCategory
   });
+  if (currentCategory && currentGameIndex >= 0) {
+    const list = GAMES[currentCategory] || [];
+    if (list[currentGameIndex]) showGame(list[currentGameIndex], false);
+  }
 }
 
 function selectCategory(key) {
@@ -103,21 +74,39 @@ function selectCategory(key) {
   }
   pickRandomGame();
   document.getElementById('game-view').classList.remove('d-none');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function pickRandomGame() {
   const list = GAMES[currentCategory];
   if (!list || list.length === 0) return;
-  let idx;
-  do {
-    idx = Math.floor(Math.random() * list.length);
-  } while (list.length > 1 && idx === currentGameIndex);
+
+  const recent = recentByCategory[currentCategory] || [];
+  const avoid = new Set(recent);
+  // Always avoid the currently shown game when possible
+  if (currentGameIndex >= 0) avoid.add(currentGameIndex);
+
+  let candidates = list.map((_, i) => i).filter(i => !avoid.has(i));
+  if (candidates.length === 0) {
+    // All recent — clear history except current
+    candidates = list.map((_, i) => i).filter(i => i !== currentGameIndex);
+    if (candidates.length === 0) candidates = list.map((_, i) => i);
+    recentByCategory[currentCategory] = [];
+  }
+
+  const idx = candidates[Math.floor(Math.random() * candidates.length)];
   currentGameIndex = idx;
+
+  // Keep last ~min(5, n-1) recent indices
+  const maxRecent = Math.min(5, Math.max(1, list.length - 1));
+  const nextRecent = [...(recentByCategory[currentCategory] || []), idx].slice(-maxRecent);
+  recentByCategory[currentCategory] = nextRecent;
+
   showGame(list[idx], true);
 }
 
 function showGame(game, updateLabel) {
-  document.getElementById('game-title').textContent = splitTitle(game.title);
+  document.getElementById('game-title').textContent = splitTitle(game.title, lang);
   document.getElementById('game-people').textContent = game.people || '—';
   document.getElementById('game-duration').textContent = game.duration || '—';
   document.getElementById('game-materials').textContent = game.materials || '—';
@@ -125,7 +114,7 @@ function showGame(game, updateLabel) {
   if (updateLabel) {
     const cat = CATEGORIES.find(c => c.key === currentCategory);
     document.getElementById('category-label').textContent =
-      t('inCategory') + (lang === 'ru' ? cat.ru : cat.lv);
+      t('inCategory') + categoryName(cat, lang);
   }
 }
 
@@ -135,18 +124,28 @@ function goBack() {
   document.getElementById('game-view').classList.add('d-none');
   document.getElementById('empty-view').classList.add('d-none');
   document.getElementById('category-view').classList.remove('d-none');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Event listeners
 document.querySelectorAll('.lang-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     lang = btn.dataset.lang;
+    saveLang(lang);
     applyLanguage();
   });
 });
 document.getElementById('btn-back').addEventListener('click', goBack);
 document.getElementById('btn-empty-back').addEventListener('click', goBack);
 document.getElementById('btn-reshuffle').addEventListener('click', pickRandomGame);
+
+// Keyboard: R for reshuffle when game is visible
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches('input, textarea, select')) return;
+  if ((e.key === 'r' || e.key === 'R') && !document.getElementById('game-view').classList.contains('d-none')) {
+    pickRandomGame();
+  }
+});
 
 // Init
 applyLanguage();
