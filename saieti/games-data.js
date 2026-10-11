@@ -1,5 +1,5 @@
 // ============================================================
-// GAMES DATA – easy to add / delete
+// GAMES DATA
 // Structure of each game:
 // {
 //   title: "English name / Русское название",
