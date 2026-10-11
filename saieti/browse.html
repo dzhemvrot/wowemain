@@ -24,15 +24,25 @@
       </div>
     </div>
 
-    <!-- Category selection -->
+    <!-- Category selection + global search -->
     <div id="category-view">
-      <p class="lead mb-4" id="choose-text">Izvēlies kategoriju:</p>
-      <div class="row g-3 justify-content-center" id="category-grid">
-        <!-- filled by JS -->
+      <div class="mb-3">
+        <label for="global-search-input" class="visually-hidden">Search</label>
+        <input type="search" id="global-search-input" class="form-control" placeholder="Meklēt pēc nosaukuma vai apraksta…" autocomplete="off" enterkeyhint="search">
+      </div>
+      <p class="text-muted small mb-3 d-none" id="global-search-count"></p>
+      <div id="global-search-results" class="row g-3 mb-4 d-none">
+        <!-- filled by JS when searching all games -->
+      </div>
+      <div id="category-section">
+        <p class="lead mb-4" id="choose-text">Izvēlies kategoriju:</p>
+        <div class="row g-3 justify-content-center" id="category-grid">
+          <!-- filled by JS -->
+        </div>
       </div>
     </div>
 
-    <!-- Games list view -->
+    <!-- Games list view (per category) -->
     <div id="list-view" class="d-none">
       <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h2 class="mb-0 fs-4" id="list-category-title"></h2>

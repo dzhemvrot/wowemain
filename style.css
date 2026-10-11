@@ -249,18 +249,10 @@ blockquote p {
   box-shadow: 0 0.35rem 0.85rem rgba(0,0,0,.12);
 }
 
-/* Catalog: collapse long descriptions */
-.game-desc-collapsed {
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.game-card .toggle-desc {
-  text-decoration: none;
-}
-.game-card .toggle-desc:hover {
-  text-decoration: underline;
+/* Catalog: game descriptions */
+.game-desc {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Focus visible for keyboard users on category cards */
