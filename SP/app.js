@@ -1,9 +1,10 @@
 (() => {
   "use strict";
 
-  const STORAGE_AUTH = "sp-auth";
-  const STORAGE_DATA = "sp-data-v2";
+  const STORAGE_AUTH = "sp-auth-user";
+  const STORAGE_DATA = "sp-data-v3";
   const SAVE_DEBOUNCE_MS = 600;
+  const MAX_LOGS = 2000;
 
   const STATUS_LABELS = {
     present: "Klāt",
@@ -11,23 +12,51 @@
     excused: "Attaisnoti",
   };
 
+  const ACTION_LABELS = {
+    login: "Ienāca",
+    logout: "Izgāja",
+    set_status: "Mainīja statusu",
+    set_all: "Atzīmēja visus",
+    clear_day: "Notīrīja dienu",
+    add_member: "Pievienoja dalībnieku",
+    remove_member: "Dzēsa dalībnieku",
+    toggle_vote: "Mainīja balsstiesības",
+    add_user: "Pievienoja lietotāju",
+    remove_user: "Dzēsa lietotāju",
+    export_csv: "Eksportēja CSV",
+    export_all_csv: "Eksportēja vēsturi CSV",
+  };
+
   const $ = (sel) => document.querySelector(sel);
 
+  let currentUser = null; // { id, username, isAdmin }
   let currentDate = null;
-  let membersCache = []; // [{ id, name, canVote }]
-  let attendanceCache = {}; // { date: { id: status } }
+  let membersCache = [];
+  let attendanceCache = {};
+  let usersCache = [];
+  let logsCache = [];
   let saveTimer = null;
   let remoteEnabled = false;
   let syncState = "idle";
 
-  // ---------- Auth ----------
-  function isAuthenticated() {
-    return sessionStorage.getItem(STORAGE_AUTH) === "1";
+  // ---------- Session ----------
+  function loadSession() {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_AUTH);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
   }
 
-  function setAuthenticated(ok) {
-    if (ok) sessionStorage.setItem(STORAGE_AUTH, "1");
+  function saveSession(user) {
+    if (user) sessionStorage.setItem(STORAGE_AUTH, JSON.stringify(user));
     else sessionStorage.removeItem(STORAGE_AUTH);
+  }
+
+  function isAuthenticated() {
+    return !!currentUser;
   }
 
   function showLogin() {
@@ -38,26 +67,87 @@
   async function showApp() {
     $("#login-view").classList.add("d-none");
     $("#app-view").classList.remove("d-none");
+    $("#user-label").textContent = currentUser
+      ? currentUser.username + (currentUser.isAdmin ? " (admin)" : "")
+      : "";
+    document.querySelectorAll(".admin-only").forEach((el) => {
+      el.classList.toggle("d-none", !(currentUser && currentUser.isAdmin));
+    });
     const today = toISODate(new Date());
     $("#date-input").value = today;
     updateSyncBadge();
     await loadFromRemoteOrLocal();
+    // Ensure seed users exist in store
+    ensureSeedUsers();
     renderMembersList();
+    fillHistorySelect();
+    if (currentUser && currentUser.isAdmin) {
+      renderUsersList();
+      renderLogs();
+    }
   }
 
-  function tryLogin() {
-    const input = $("#password-input");
+  async function tryLogin() {
+    const username = ($("#username-input").value || "").trim();
+    const password = $("#password-input").value || "";
     const err = $("#login-error");
-    if (input.value === APP_PASSWORD) {
-      setAuthenticated(true);
-      err.classList.add("d-none");
-      input.value = "";
-      showApp();
-    } else {
-      err.classList.remove("d-none");
-      input.focus();
-      input.select();
+
+    // Need users loaded (local or remote) before auth
+    remoteEnabled = hasRemote();
+    try {
+      if (remoteEnabled) {
+        applyPayload(await fetchRemote());
+        saveLocal();
+      } else {
+        applyPayload(loadLocal());
+      }
+    } catch {
+      applyPayload(loadLocal());
     }
+    ensureSeedUsers();
+
+    const user = usersCache.find(
+      (u) =>
+        u.username.toLowerCase() === username.toLowerCase() &&
+        u.password === password
+    );
+    if (!user) {
+      err.classList.remove("d-none");
+      return;
+    }
+    err.classList.add("d-none");
+    currentUser = {
+      id: user.id,
+      username: user.username,
+      isAdmin: !!user.isAdmin,
+    };
+    saveSession(currentUser);
+    $("#username-input").value = "";
+    $("#password-input").value = "";
+    addLog("login", "");
+    scheduleSave();
+    showApp();
+  }
+
+  function logout() {
+    addLog("logout", "");
+    scheduleSave();
+    currentUser = null;
+    saveSession(null);
+    showLogin();
+  }
+
+  // ---------- Tabs ----------
+  function switchTab(tabId) {
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.add("d-none"));
+    document.querySelectorAll("#main-tabs .nav-link").forEach((b) => {
+      b.classList.toggle("active", b.dataset.tab === tabId);
+    });
+    const panel = document.getElementById(tabId);
+    if (panel) panel.classList.remove("d-none");
+    if (tabId === "tab-history") fillHistorySelect();
+    if (tabId === "tab-logs" && currentUser && currentUser.isAdmin) renderLogs();
+    if (tabId === "tab-users" && currentUser && currentUser.isAdmin) renderUsersList();
   }
 
   // ---------- Sync UI ----------
@@ -82,65 +172,95 @@
           : "bg-secondary");
   }
 
-  // ---------- Payload helpers ----------
-  function emptyPayload() {
-    return { members: [], attendance: {} };
-  }
-
+  // ---------- Payload ----------
   function payload() {
-    return { members: membersCache, attendance: attendanceCache };
+    return {
+      members: membersCache,
+      attendance: attendanceCache,
+      users: usersCache,
+      logs: logsCache.slice(-MAX_LOGS),
+    };
   }
 
   function applyPayload(data) {
     if (!data || typeof data !== "object") {
-      membersCache = cloneSeed();
+      membersCache = cloneSeedMembers();
       attendanceCache = {};
+      usersCache = cloneSeedUsers();
+      logsCache = [];
       return;
     }
-    // Legacy: only attendance map with date keys
-    if (!data.members && !data.attendance) {
+    if (!data.members && !data.attendance && !data.users) {
       const keys = Object.keys(data);
       if (keys.length === 0 || /^\d{4}-\d{2}-\d{2}$/.test(keys[0])) {
         attendanceCache = data;
-        membersCache = cloneSeed();
+        membersCache = cloneSeedMembers();
+        usersCache = cloneSeedUsers();
+        logsCache = [];
         return;
       }
     }
     membersCache =
       Array.isArray(data.members) && data.members.length
         ? data.members.map(normalizeMember).filter(Boolean)
-        : cloneSeed();
+        : cloneSeedMembers();
     attendanceCache =
       data.attendance && typeof data.attendance === "object"
         ? data.attendance
         : {};
+    usersCache = Array.isArray(data.users)
+      ? data.users.map(normalizeUser).filter(Boolean)
+      : [];
+    logsCache = Array.isArray(data.logs) ? data.logs : [];
   }
 
   function normalizeMember(m) {
     if (!m || !m.name) return null;
     return {
-      id: m.id || newMemberId(),
+      id: m.id || newId("m"),
       name: String(m.name).trim(),
       canVote: !!m.canVote,
     };
   }
 
-  function cloneSeed() {
-    const seed =
-      typeof SEED_MEMBERS !== "undefined"
-        ? SEED_MEMBERS
-        : typeof MEMBERS !== "undefined"
-          ? MEMBERS
-          : [];
-    return seed.map((m) => ({
-      id: m.id,
-      name: m.name,
-      canVote: !!m.canVote,
+  function normalizeUser(u) {
+    if (!u || !u.username) return null;
+    return {
+      id: u.id || newId("u"),
+      username: String(u.username).trim(),
+      password: String(u.password ?? ""),
+      isAdmin: !!u.isAdmin,
+    };
+  }
+
+  function cloneSeedMembers() {
+    const seed = typeof SEED_MEMBERS !== "undefined" ? SEED_MEMBERS : [];
+    return seed.map((m) => ({ id: m.id, name: m.name, canVote: !!m.canVote }));
+  }
+
+  function cloneSeedUsers() {
+    const seed = typeof SEED_USERS !== "undefined" ? SEED_USERS : [];
+    return seed.map((u) => ({
+      id: u.id,
+      username: u.username,
+      password: u.password,
+      isAdmin: !!u.isAdmin,
     }));
   }
 
-  function newMemberId() {
-    return "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  function ensureSeedUsers() {
+    if (!usersCache.length) {
+      usersCache = cloneSeedUsers();
+      scheduleSave();
+    }
+  }
+
+  function newId(prefix) {
+    return (
+      prefix +
+      Date.now().toString(36) +
+      Math.random().toString(36).slice(2, 6)
+    );
   }
 
   // ---------- Local / remote ----------
@@ -161,17 +281,18 @@
   }
 
   async function fetchRemote() {
-    const res = await fetch(REMOTE_URL.trim(), { method: "GET", cache: "no-store" });
+    const res = await fetch(REMOTE_URL.trim(), {
+      method: "GET",
+      cache: "no-store",
+    });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const json = await res.json();
-    if (json && (json.members !== undefined || json.attendance !== undefined)) {
-      return {
-        members: json.members || [],
-        attendance: json.attendance || {},
-      };
-    }
-    // legacy whole body was attendance
-    return { members: [], attendance: json && typeof json === "object" ? json : {} };
+    return {
+      members: json.members || [],
+      attendance: json.attendance || {},
+      users: json.users || [],
+      logs: json.logs || [],
+    };
   }
 
   async function pushRemote() {
@@ -191,7 +312,8 @@
     remoteEnabled = hasRemote();
     if (!remoteEnabled) {
       applyPayload(loadLocal());
-      if (!membersCache.length) membersCache = cloneSeed();
+      if (!membersCache.length) membersCache = cloneSeedMembers();
+      if (!usersCache.length) usersCache = cloneSeedUsers();
       syncState = "local";
       updateSyncBadge();
       return;
@@ -199,15 +321,16 @@
     syncState = "loading";
     updateSyncBadge();
     try {
-      const remote = await fetchRemote();
-      applyPayload(remote);
-      if (!membersCache.length) membersCache = cloneSeed();
+      applyPayload(await fetchRemote());
+      if (!membersCache.length) membersCache = cloneSeedMembers();
+      if (!usersCache.length) usersCache = cloneSeedUsers();
       saveLocal();
       syncState = "ok";
     } catch (err) {
       console.warn("Remote load failed", err);
       applyPayload(loadLocal());
-      if (!membersCache.length) membersCache = cloneSeed();
+      if (!membersCache.length) membersCache = cloneSeedMembers();
+      if (!usersCache.length) usersCache = cloneSeedUsers();
       syncState = "error";
     }
     updateSyncBadge();
@@ -235,7 +358,127 @@
     }, SAVE_DEBOUNCE_MS);
   }
 
-  // ---------- Members CRUD ----------
+  // ---------- Logging ----------
+  function addLog(action, details) {
+    logsCache.push({
+      ts: new Date().toISOString(),
+      username: currentUser ? currentUser.username : "?",
+      action,
+      details: details || "",
+    });
+    if (logsCache.length > MAX_LOGS) {
+      logsCache = logsCache.slice(-MAX_LOGS);
+    }
+  }
+
+  function formatLogTime(iso) {
+    try {
+      const d = new Date(iso);
+      const pad = (n) => String(n).padStart(2, "0");
+      return (
+        pad(d.getDate()) +
+        "." +
+        pad(d.getMonth() + 1) +
+        "." +
+        d.getFullYear() +
+        " " +
+        pad(d.getHours()) +
+        ":" +
+        pad(d.getMinutes()) +
+        ":" +
+        pad(d.getSeconds())
+      );
+    } catch {
+      return iso;
+    }
+  }
+
+  function renderLogs() {
+    const tbody = $("#logs-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    const rows = logsCache.slice().reverse();
+    rows.forEach((log) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="text-nowrap">${escapeHtml(formatLogTime(log.ts))}</td>
+        <td>${escapeHtml(log.username)}</td>
+        <td>${escapeHtml(ACTION_LABELS[log.action] || log.action)}</td>
+        <td>${escapeHtml(log.details || "")}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ---------- Users (admin) ----------
+  function renderUsersList() {
+    const tbody = $("#users-list");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    usersCache.forEach((u) => {
+      const tr = document.createElement("tr");
+      const canDelete =
+        usersCache.filter((x) => x.isAdmin).length > 1 || !u.isAdmin;
+      tr.innerHTML = `
+        <td>${escapeHtml(u.username)}</td>
+        <td>${u.isAdmin ? "Administrators" : "Lietotājs"}</td>
+        <td class="text-end">
+          ${
+            canDelete
+              ? `<button type="button" class="btn btn-outline-danger btn-sm btn-remove-user" data-id="${escapeHtml(u.id)}">Dzēst</button>`
+              : `<span class="text-muted small">Pēdējais admin</span>`
+          }
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll(".btn-remove-user").forEach((btn) => {
+      btn.addEventListener("click", () => removeUser(btn.dataset.id));
+    });
+  }
+
+  function addUser(username, password, isAdmin) {
+    const name = String(username || "").trim();
+    const pass = String(password || "");
+    if (!name || !pass) {
+      alert("Ievadi lietotājvārdu un paroli.");
+      return false;
+    }
+    if (usersCache.some((u) => u.username.toLowerCase() === name.toLowerCase())) {
+      alert("Šāds lietotājvārds jau eksistē.");
+      return false;
+    }
+    usersCache.push({
+      id: newId("u"),
+      username: name,
+      password: pass,
+      isAdmin: !!isAdmin,
+    });
+    addLog("add_user", name + (isAdmin ? " (admin)" : ""));
+    scheduleSave();
+    renderUsersList();
+    return true;
+  }
+
+  function removeUser(id) {
+    const u = usersCache.find((x) => x.id === id);
+    if (!u) return;
+    if (u.id === currentUser.id) {
+      alert("Nevar dzēst pašreizējo kontu.");
+      return;
+    }
+    if (u.isAdmin && usersCache.filter((x) => x.isAdmin).length <= 1) {
+      alert("Nevar dzēst pēdējo administratoru.");
+      return;
+    }
+    if (!confirm("Dzēst lietotāju «" + u.username + "»?")) return;
+    usersCache = usersCache.filter((x) => x.id !== id);
+    addLog("remove_user", u.username);
+    scheduleSave();
+    renderUsersList();
+  }
+
+  // ---------- Members ----------
   function voters() {
     return membersCache.filter((m) => m.canVote);
   }
@@ -247,19 +490,25 @@
   function addMember(name, canVote) {
     const n = String(name || "").trim();
     if (!n) return false;
-    membersCache.push({ id: newMemberId(), name: n, canVote: !!canVote });
+    membersCache.push({ id: newId("m"), name: n, canVote: !!canVote });
     membersCache.sort((a, b) => a.name.localeCompare(b.name, "lv"));
+    addLog("add_member", n + (canVote ? " (balsstiesības)" : ""));
     scheduleSave();
     renderMembersList();
+    fillHistorySelect();
     if (currentDate) openDate(currentDate, true);
     return true;
   }
 
   function removeMember(id) {
-    if (!confirm("Dzēst šo dalībnieku no saraksta? Apmeklējuma vēsture paliks datos.")) return;
-    membersCache = membersCache.filter((m) => m.id !== id);
+    const m = membersCache.find((x) => x.id === id);
+    if (!m) return;
+    if (!confirm("Dzēst dalībnieku «" + m.name + "»?")) return;
+    membersCache = membersCache.filter((x) => x.id !== id);
+    addLog("remove_member", m.name);
     scheduleSave();
     renderMembersList();
+    fillHistorySelect();
     if (currentDate) openDate(currentDate, true);
   }
 
@@ -267,6 +516,7 @@
     const m = membersCache.find((x) => x.id === id);
     if (!m) return;
     m.canVote = !m.canVote;
+    addLog("toggle_vote", m.name + " → " + (m.canVote ? "jā" : "nē"));
     scheduleSave();
     renderMembersList();
     if (currentDate) openDate(currentDate, true);
@@ -310,11 +560,21 @@
     if (Object.keys(attendanceCache[dateStr]).length === 0) {
       delete attendanceCache[dateStr];
     }
+    const m = membersCache.find((x) => x.id === memberId);
+    addLog(
+      "set_status",
+      (m ? m.name : memberId) +
+        " · " +
+        formatLatvianDate(dateStr) +
+        " · " +
+        (STATUS_LABELS[status] || status)
+    );
     scheduleSave();
   }
 
   function clearDay(dateStr) {
     delete attendanceCache[dateStr];
+    addLog("clear_day", formatLatvianDate(dateStr));
     scheduleSave();
   }
 
@@ -345,7 +605,7 @@
     return s;
   }
 
-  // ---------- Quorum (only "present" counts) ----------
+  // ---------- Quorum ----------
   function computeQuorum(dateStr) {
     const day = getDayAttendance(dateStr);
     const voting = voters();
@@ -359,21 +619,29 @@
       else if (s === "excused") excused++;
       else if (s === "absent") absent++;
     });
-    const pct50 = total > 0 ? present / total > 0.5 : false;
-    const pct23 = total > 0 ? present / total >= 2 / 3 : false;
-    return { total, present, excused, absent, pct50, pct23 };
+    return {
+      total,
+      present,
+      excused,
+      absent,
+      pct50: total > 0 ? present / total > 0.5 : false,
+      pct23: total > 0 ? present / total >= 2 / 3 : false,
+    };
   }
 
   function updateQuorumUI(dateStr) {
-    const { total, present, excused, absent, pct50, pct23 } = computeQuorum(dateStr);
+    const { total, present, excused, absent, pct50, pct23 } =
+      computeQuorum(dateStr);
     $("#quorum-50-text").textContent = pct50
       ? `JĀ (${present}/${total})`
       : `NĒ (${present}/${total})`;
     $("#quorum-23-text").textContent = pct23
       ? `JĀ (${present}/${total})`
       : `NĒ (${present}/${total})`;
-    $("#quorum-50").className = "quorum-box " + (pct50 ? "quorum-ok" : "quorum-fail");
-    $("#quorum-23").className = "quorum-box " + (pct23 ? "quorum-ok" : "quorum-fail");
+    $("#quorum-50").className =
+      "quorum-box " + (pct50 ? "quorum-ok" : "quorum-fail");
+    $("#quorum-23").className =
+      "quorum-box " + (pct23 ? "quorum-ok" : "quorum-fail");
     const needed50 = Math.floor(total / 2) + 1;
     const needed23 = Math.ceil((total * 2) / 3);
     $("#quorum-detail").textContent =
@@ -426,10 +694,12 @@
       updateSyncBadge();
       try {
         applyPayload(await fetchRemote());
-        if (!membersCache.length) membersCache = cloneSeed();
+        if (!membersCache.length) membersCache = cloneSeedMembers();
+        if (!usersCache.length) usersCache = cloneSeedUsers();
         saveLocal();
         syncState = "ok";
         renderMembersList();
+        fillHistorySelect();
       } catch (err) {
         console.warn(err);
         syncState = "error";
@@ -463,6 +733,10 @@
     membersCache.forEach((m) => {
       attendanceCache[currentDate][m.id] = status;
     });
+    addLog(
+      "set_all",
+      formatLatvianDate(currentDate) + " · " + (STATUS_LABELS[status] || status)
+    );
     scheduleSave();
     openDate(currentDate, true);
   }
@@ -474,7 +748,78 @@
     openDate(currentDate, true);
   }
 
-  // ---------- CSV export ----------
+  // ---------- Person history ----------
+  function fillHistorySelect() {
+    const sel = $("#history-member");
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— izvēlies —</option>';
+    const ordered = [...membersCache].sort((a, b) =>
+      a.name.localeCompare(b.name, "lv")
+    );
+    ordered.forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = m.name + (m.canVote ? "" : " (bez balsstiesībām)");
+      sel.appendChild(opt);
+    });
+    if (prev && ordered.some((m) => m.id === prev)) sel.value = prev;
+  }
+
+  function showPersonHistory() {
+    const id = $("#history-member").value;
+    const result = $("#history-result");
+    if (!id) {
+      result.classList.add("d-none");
+      return;
+    }
+    const member = membersCache.find((m) => m.id === id);
+    if (!member) {
+      result.classList.add("d-none");
+      return;
+    }
+    result.classList.remove("d-none");
+    $("#history-title").textContent = member.name;
+
+    const dates = Object.keys(attendanceCache).sort().reverse();
+    const rows = [];
+    let cPresent = 0;
+    let cAbsent = 0;
+    let cExcused = 0;
+    dates.forEach((dateStr) => {
+      const st = (attendanceCache[dateStr] || {})[id];
+      if (!st) return;
+      if (st === "present") cPresent++;
+      else if (st === "absent") cAbsent++;
+      else if (st === "excused") cExcused++;
+      rows.push({ dateStr, st });
+    });
+
+    $("#hist-count-present").textContent = "Klāt: " + cPresent;
+    $("#hist-count-absent").textContent = "Nav: " + cAbsent;
+    $("#hist-count-excused").textContent = "Attaisnoti: " + cExcused;
+    $("#hist-count-total").textContent = "Kopā: " + rows.length;
+
+    const tbody = $("#history-tbody");
+    tbody.innerHTML = "";
+    if (!rows.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="2" class="text-muted">Nav ierakstu.</td></tr>';
+      return;
+    }
+    rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(formatLatvianDate(r.dateStr))}</td>
+        <td><span class="status-pill ${escapeHtml(r.st)}">${escapeHtml(
+          STATUS_LABELS[r.st] || r.st
+        )}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ---------- CSV ----------
   function statusLabel(code) {
     return STATUS_LABELS[code] || "—";
   }
@@ -482,10 +827,11 @@
   function buildDayCsv(dateStr) {
     const day = getDayAttendance(dateStr);
     const rows = [
-      ["Datums", "Vārds, uzvārds", "Balsstiesības", "Statuss"].map(csvEscape).join(","),
+      ["Datums", "Vārds, uzvārds", "Balsstiesības", "Statuss"]
+        .map(csvEscape)
+        .join(","),
     ];
-    const ordered = [...voters(), ...nonVoters()];
-    ordered.forEach((m) => {
+    [...voters(), ...nonVoters()].forEach((m) => {
       rows.push(
         [
           formatLatvianDate(dateStr),
@@ -503,13 +849,15 @@
   function buildAllCsv() {
     const dates = Object.keys(attendanceCache).sort();
     const rows = [
-      ["Datums", "Vārds, uzvārds", "Balsstiesības", "Statuss"].map(csvEscape).join(","),
+      ["Datums", "Vārds, uzvārds", "Balsstiesības", "Statuss"]
+        .map(csvEscape)
+        .join(","),
     ];
     const ordered = [...voters(), ...nonVoters()];
     dates.forEach((dateStr) => {
       const day = getDayAttendance(dateStr);
       ordered.forEach((m) => {
-        if (!day[m.id]) return; // only rows with a recorded status
+        if (!day[m.id]) return;
         rows.push(
           [
             formatLatvianDate(dateStr),
@@ -526,7 +874,6 @@
   }
 
   function downloadCsv(filename, content) {
-    // BOM for Excel Latvian
     const blob = new Blob(["\uFEFF" + content], {
       type: "text/csv;charset=utf-8;",
     });
@@ -540,18 +887,25 @@
 
   function exportCurrentDay() {
     if (!currentDate) return;
-    const name = `apmeklejums_${currentDate}.csv`;
-    downloadCsv(name, buildDayCsv(currentDate));
+    addLog("export_csv", formatLatvianDate(currentDate));
+    scheduleSave();
+    downloadCsv("apmeklejums_" + currentDate + ".csv", buildDayCsv(currentDate));
   }
 
   function exportAll() {
-    const name = `apmeklejums_vesture.csv`;
-    downloadCsv(name, buildAllCsv());
+    addLog("export_all_csv", "");
+    scheduleSave();
+    downloadCsv("apmeklejums_vesture.csv", buildAllCsv());
   }
 
   async function manualRefresh() {
     await loadFromRemoteOrLocal();
     renderMembersList();
+    fillHistorySelect();
+    if (currentUser && currentUser.isAdmin) {
+      renderUsersList();
+      renderLogs();
+    }
     if (currentDate) openDate(currentDate, true);
   }
 
@@ -561,10 +915,15 @@
     $("#password-input").addEventListener("keydown", (e) => {
       if (e.key === "Enter") tryLogin();
     });
-    $("#btn-logout").addEventListener("click", () => {
-      setAuthenticated(false);
-      showLogin();
+    $("#username-input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") $("#password-input").focus();
     });
+    $("#btn-logout").addEventListener("click", logout);
+
+    document.querySelectorAll("#main-tabs .nav-link").forEach((btn) => {
+      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+    });
+
     $("#btn-load-date").addEventListener("click", () => {
       openDate($("#date-input").value);
     });
@@ -583,9 +942,7 @@
     $("#btn-refresh").addEventListener("click", manualRefresh);
 
     $("#btn-add-member").addEventListener("click", () => {
-      const name = $("#new-member-name").value;
-      const canVote = $("#new-member-vote").checked;
-      if (addMember(name, canVote)) {
+      if (addMember($("#new-member-name").value, $("#new-member-vote").checked)) {
         $("#new-member-name").value = "";
         $("#new-member-name").focus();
       } else {
@@ -595,11 +952,30 @@
     $("#new-member-name").addEventListener("keydown", (e) => {
       if (e.key === "Enter") $("#btn-add-member").click();
     });
-    $("#btn-toggle-members").addEventListener("click", () => {
-      $("#members-panel").classList.toggle("d-none");
+
+    $("#btn-show-history").addEventListener("click", showPersonHistory);
+    $("#history-member").addEventListener("change", showPersonHistory);
+
+    $("#btn-add-user").addEventListener("click", () => {
+      if (
+        addUser(
+          $("#new-user-name").value,
+          $("#new-user-pass").value,
+          $("#new-user-admin").checked
+        )
+      ) {
+        $("#new-user-name").value = "";
+        $("#new-user-pass").value = "";
+        $("#new-user-admin").checked = false;
+      }
+    });
+    $("#btn-refresh-logs").addEventListener("click", async () => {
+      await loadFromRemoteOrLocal();
+      renderLogs();
     });
 
-    if (isAuthenticated()) showApp();
+    currentUser = loadSession();
+    if (currentUser) showApp();
     else showLogin();
   }
 
