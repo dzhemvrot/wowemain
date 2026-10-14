@@ -194,9 +194,32 @@
     saveSession(currentUser);
     $("#username-input").value = "";
     $("#password-input").value = "";
-    addLog("login", "");
+    const ip = await fetchClientIp();
+    addLog("login", ip ? "IP: " + ip : "IP: nezināma");
     scheduleSave();
     showApp();
+  }
+
+  /** Public IP via external lookup (browser cannot read it locally). */
+  async function fetchClientIp() {
+    const endpoints = [
+      "https://api.ipify.org?format=json",
+      "https://api64.ipify.org?format=json",
+    ];
+    for (const url of endpoints) {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 4000);
+        const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+        clearTimeout(t);
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data && data.ip) return String(data.ip);
+      } catch (_) {
+        /* try next */
+      }
+    }
+    return null;
   }
 
   function logout() {
@@ -539,7 +562,9 @@
     tbody.innerHTML = "";
     usersCache.forEach((u) => {
       const tr = document.createElement("tr");
+      // Main admin account can never be deleted
       const canDelete =
+        !isMainAdmin(u) &&
         (usersCache.filter((x) => x.isAdmin).length > 1 || !u.isAdmin) &&
         u.id !== (currentUser && currentUser.id);
       const canSetPass = canSetPasswordFor(u) && u.id !== currentUser.id;
@@ -557,9 +582,11 @@
           ${
             canDelete
               ? `<button type="button" class="btn btn-outline-danger btn-sm btn-remove-user" data-id="${escapeHtml(u.id)}">Dzēst</button>`
-              : u.id === (currentUser && currentUser.id)
-                ? `<span class="text-muted small">Tu</span>`
-                : `<span class="text-muted small">—</span>`
+              : isMainAdmin(u)
+                ? `<span class="text-muted small">Aizsargāts</span>`
+                : u.id === (currentUser && currentUser.id)
+                  ? `<span class="text-muted small">Tu</span>`
+                  : `<span class="text-muted small">—</span>`
           }
         </td>
       `;
@@ -688,6 +715,10 @@
   function removeUser(id) {
     const u = usersCache.find((x) => x.id === id);
     if (!u) return;
+    if (isMainAdmin(u)) {
+      alert("Galveno admin kontu («admin») nevar dzēst.");
+      return;
+    }
     if (u.id === currentUser.id) {
       alert("Nevar dzēst pašreizējo kontu.");
       return;
