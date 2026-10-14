@@ -24,11 +24,68 @@
     set_joined: "Mainīja pievienošanās datumu",
     add_user: "Pievienoja lietotāju",
     remove_user: "Dzēsa lietotāju",
+    change_password: "Mainīja paroli",
+    admin_set_password: "Iestatīja lietotāja paroli",
     export_csv: "Eksportēja CSV",
     export_all_csv: "Eksportēja vēsturi CSV",
   };
 
+  const MIN_PASSWORD_LEN = 6;
+
   const $ = (sel) => document.querySelector(sel);
+
+  let adminSetPassTargetId = null;
+
+  // ---------- Password hashing (SHA-256 + salt) ----------
+  function randomSalt() {
+    const arr = new Uint8Array(16);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  async function sha256Hex(text) {
+    const data = new TextEncoder().encode(text);
+    const buf = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(buf), (b) =>
+      b.toString(16).padStart(2, "0")
+    ).join("");
+  }
+
+  async function hashPassword(password, salt) {
+    return sha256Hex(salt + password);
+  }
+
+  async function verifyUserPassword(user, password) {
+    if (!user) return false;
+    // Legacy plain-text (migrate on successful login)
+    if (user.password != null && user.password !== "" && !user.passwordHash) {
+      return user.password === password;
+    }
+    if (!user.passwordHash || !user.salt) return false;
+    const h = await hashPassword(password, user.salt);
+    return h === user.passwordHash;
+  }
+
+  async function setUserPasswordFields(user, newPassword) {
+    const salt = randomSalt();
+    const passwordHash = await hashPassword(newPassword, salt);
+    user.salt = salt;
+    user.passwordHash = passwordHash;
+    delete user.password;
+  }
+
+  function isMainAdmin(user) {
+    return user && String(user.username).toLowerCase() === "admin";
+  }
+
+  function canSetPasswordFor(target) {
+    if (!currentUser || !target) return false;
+    if (target.id === currentUser.id) return true; // own — handled separately
+    if (!currentUser.isAdmin) return false;
+    if (!target.isAdmin) return true; // any admin → non-admin
+    // target is admin: only main admin may set
+    return isMainAdmin(currentUser);
+  }
 
   let currentUser = null; // { id, username, isAdmin }
   let currentDate = null;
@@ -63,6 +120,14 @@
   function showLogin() {
     $("#login-view").classList.remove("d-none");
     $("#app-view").classList.add("d-none");
+    // Hide all app panels so admin tabs don't leak into next session
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.add("d-none"));
+    document.querySelectorAll("#main-tabs .nav-link").forEach((b) => {
+      b.classList.remove("active");
+    });
+    document.querySelectorAll(".admin-only").forEach((el) => {
+      el.classList.add("d-none");
+    });
   }
 
   async function showApp() {
@@ -74,12 +139,14 @@
     document.querySelectorAll(".admin-only").forEach((el) => {
       el.classList.toggle("d-none", !(currentUser && currentUser.isAdmin));
     });
+    // Always land on a non-admin tab after login
+    switchTab("tab-attendance");
     const today = toISODate(new Date());
     $("#date-input").value = today;
     updateSyncBadge();
     await loadFromRemoteOrLocal();
-    // Ensure seed users exist in store
     ensureSeedUsers();
+    await migrateLegacyPasswordsInStore();
     renderMembersList();
     fillHistorySelect();
     if (currentUser && currentUser.isAdmin) {
@@ -93,7 +160,6 @@
     const password = $("#password-input").value || "";
     const err = $("#login-error");
 
-    // Need users loaded (local or remote) before auth
     remoteEnabled = hasRemote();
     try {
       if (remoteEnabled) {
@@ -108,13 +174,16 @@
     ensureSeedUsers();
 
     const user = usersCache.find(
-      (u) =>
-        u.username.toLowerCase() === username.toLowerCase() &&
-        u.password === password
+      (u) => u.username.toLowerCase() === username.toLowerCase()
     );
-    if (!user) {
+    if (!user || !(await verifyUserPassword(user, password))) {
       err.classList.remove("d-none");
       return;
+    }
+    // Migrate legacy plaintext → hash on successful login
+    if (user.password != null && !user.passwordHash) {
+      await setUserPasswordFields(user, password);
+      scheduleSave();
     }
     err.classList.add("d-none");
     currentUser = {
@@ -135,11 +204,19 @@
     scheduleSave();
     currentUser = null;
     saveSession(null);
+    adminSetPassTargetId = null;
     showLogin();
   }
 
   // ---------- Tabs ----------
   function switchTab(tabId) {
+    // Non-admins cannot open admin tabs
+    if (
+      (tabId === "tab-users" || tabId === "tab-logs") &&
+      !(currentUser && currentUser.isAdmin)
+    ) {
+      tabId = "tab-attendance";
+    }
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.add("d-none"));
     document.querySelectorAll("#main-tabs .nav-link").forEach((b) => {
       b.classList.toggle("active", b.dataset.tab === tabId);
@@ -148,7 +225,10 @@
     if (panel) panel.classList.remove("d-none");
     if (tabId === "tab-history") fillHistorySelect();
     if (tabId === "tab-logs" && currentUser && currentUser.isAdmin) renderLogs();
-    if (tabId === "tab-users" && currentUser && currentUser.isAdmin) renderUsersList();
+    if (tabId === "tab-users" && currentUser && currentUser.isAdmin) {
+      renderUsersList();
+      hideAdminSetPass();
+    }
   }
 
   // ---------- Sync UI ----------
@@ -242,12 +322,19 @@
 
   function normalizeUser(u) {
     if (!u || !u.username) return null;
-    return {
+    const out = {
       id: u.id || newId("u"),
       username: String(u.username).trim(),
-      password: String(u.password ?? ""),
       isAdmin: !!u.isAdmin,
     };
+    if (u.passwordHash && u.salt) {
+      out.passwordHash = String(u.passwordHash);
+      out.salt = String(u.salt);
+    } else if (u.password != null && u.password !== "") {
+      // Legacy plaintext until next successful login migrates it
+      out.password = String(u.password);
+    }
+    return out;
   }
 
   function cloneSeedMembers() {
@@ -262,19 +349,32 @@
 
   function cloneSeedUsers() {
     const seed = typeof SEED_USERS !== "undefined" ? SEED_USERS : [];
-    return seed.map((u) => ({
-      id: u.id,
-      username: u.username,
-      password: u.password,
-      isAdmin: !!u.isAdmin,
-    }));
+    return seed.map((u) => normalizeUser(u)).filter(Boolean);
   }
 
   function ensureSeedUsers() {
     if (!usersCache.length) {
       usersCache = cloneSeedUsers();
       scheduleSave();
+      return;
     }
+    // If store has users but no main admin, merge seed admin if missing
+    const hasAdminName = usersCache.some(
+      (u) => u.username.toLowerCase() === "admin"
+    );
+    if (!hasAdminName) {
+      const seed = cloneSeedUsers();
+      const main = seed.find((u) => u.username.toLowerCase() === "admin");
+      if (main) {
+        usersCache.push(main);
+        scheduleSave();
+      }
+    }
+  }
+
+  /** Strip any leftover plaintext passwords after all users have hashes. */
+  async function migrateLegacyPasswordsInStore() {
+    // Nothing automatic without knowing plaintext; login migrates per-user.
   }
 
   function newId(prefix) {
@@ -440,15 +540,26 @@
     usersCache.forEach((u) => {
       const tr = document.createElement("tr");
       const canDelete =
-        usersCache.filter((x) => x.isAdmin).length > 1 || !u.isAdmin;
+        (usersCache.filter((x) => x.isAdmin).length > 1 || !u.isAdmin) &&
+        u.id !== (currentUser && currentUser.id);
+      const canSetPass = canSetPasswordFor(u) && u.id !== currentUser.id;
       tr.innerHTML = `
-        <td>${escapeHtml(u.username)}</td>
+        <td>${escapeHtml(u.username)}${
+          isMainAdmin(u) ? ' <span class="badge bg-dark">galvenais</span>' : ""
+        }</td>
         <td>${u.isAdmin ? "Administrators" : "Lietotājs"}</td>
         <td class="text-end">
           ${
+            canSetPass
+              ? `<button type="button" class="btn btn-outline-primary btn-sm btn-set-pass" data-id="${escapeHtml(u.id)}">Parole</button> `
+              : ""
+          }
+          ${
             canDelete
               ? `<button type="button" class="btn btn-outline-danger btn-sm btn-remove-user" data-id="${escapeHtml(u.id)}">Dzēst</button>`
-              : `<span class="text-muted small">Pēdējais admin</span>`
+              : u.id === (currentUser && currentUser.id)
+                ? `<span class="text-muted small">Tu</span>`
+                : `<span class="text-muted small">—</span>`
           }
         </td>
       `;
@@ -457,29 +568,121 @@
     tbody.querySelectorAll(".btn-remove-user").forEach((btn) => {
       btn.addEventListener("click", () => removeUser(btn.dataset.id));
     });
+    tbody.querySelectorAll(".btn-set-pass").forEach((btn) => {
+      btn.addEventListener("click", () => showAdminSetPass(btn.dataset.id));
+    });
   }
 
-  function addUser(username, password, isAdmin) {
+  async function addUser(username, password, isAdmin) {
     const name = String(username || "").trim();
     const pass = String(password || "");
     if (!name || !pass) {
       alert("Ievadi lietotājvārdu un paroli.");
       return false;
     }
+    if (pass.length < MIN_PASSWORD_LEN) {
+      alert("Parolei jābūt vismaz " + MIN_PASSWORD_LEN + " simboliem.");
+      return false;
+    }
+    // Only main admin can create other admins
+    if (isAdmin && !isMainAdmin(currentUser)) {
+      alert("Tikai galvenais admin var izveidot administratorus.");
+      return false;
+    }
     if (usersCache.some((u) => u.username.toLowerCase() === name.toLowerCase())) {
       alert("Šāds lietotājvārds jau eksistē.");
       return false;
     }
-    usersCache.push({
+    const user = {
       id: newId("u"),
       username: name,
-      password: pass,
       isAdmin: !!isAdmin,
-    });
+    };
+    await setUserPasswordFields(user, pass);
+    usersCache.push(user);
     addLog("add_user", name + (isAdmin ? " (admin)" : ""));
     scheduleSave();
     renderUsersList();
     return true;
+  }
+
+  function showAdminSetPass(userId) {
+    const u = usersCache.find((x) => x.id === userId);
+    if (!u || !canSetPasswordFor(u)) {
+      alert("Nav tiesību mainīt šī lietotāja paroli.");
+      return;
+    }
+    adminSetPassTargetId = userId;
+    $("#admin-set-pass-user").textContent = u.username;
+    $("#admin-set-pass-input").value = "";
+    $("#admin-set-pass-error").classList.add("d-none");
+    $("#admin-set-pass-card").classList.remove("d-none");
+  }
+
+  function hideAdminSetPass() {
+    adminSetPassTargetId = null;
+    const card = $("#admin-set-pass-card");
+    if (card) card.classList.add("d-none");
+  }
+
+  async function adminSetPassword() {
+    const err = $("#admin-set-pass-error");
+    err.classList.add("d-none");
+    const u = usersCache.find((x) => x.id === adminSetPassTargetId);
+    if (!u || !canSetPasswordFor(u)) {
+      err.textContent = "Nav tiesību.";
+      err.classList.remove("d-none");
+      return;
+    }
+    const pass = $("#admin-set-pass-input").value || "";
+    if (pass.length < MIN_PASSWORD_LEN) {
+      err.textContent = "Parolei jābūt vismaz " + MIN_PASSWORD_LEN + " simboliem.";
+      err.classList.remove("d-none");
+      return;
+    }
+    await setUserPasswordFields(u, pass);
+    addLog("admin_set_password", u.username);
+    scheduleSave();
+    hideAdminSetPass();
+    alert("Parole lietotājam «" + u.username + "» nomainīta.");
+  }
+
+  async function changeOwnPassword() {
+    const err = $("#own-pass-error");
+    const ok = $("#own-pass-ok");
+    err.classList.add("d-none");
+    ok.classList.add("d-none");
+    const current = $("#own-pass-current").value || "";
+    const neu = $("#own-pass-new").value || "";
+    const conf = $("#own-pass-confirm").value || "";
+    const user = usersCache.find((x) => x.id === currentUser.id);
+    if (!user) {
+      err.textContent = "Lietotājs nav atrasts.";
+      err.classList.remove("d-none");
+      return;
+    }
+    if (!(await verifyUserPassword(user, current))) {
+      err.textContent = "Pašreizējā parole nav pareiza.";
+      err.classList.remove("d-none");
+      return;
+    }
+    if (neu.length < MIN_PASSWORD_LEN) {
+      err.textContent = "Jaunajai parolei jābūt vismaz " + MIN_PASSWORD_LEN + " simboliem.";
+      err.classList.remove("d-none");
+      return;
+    }
+    if (neu !== conf) {
+      err.textContent = "Jaunā parole un apstiprinājums nesakrīt.";
+      err.classList.remove("d-none");
+      return;
+    }
+    await setUserPasswordFields(user, neu);
+    addLog("change_password", currentUser.username);
+    scheduleSave();
+    $("#own-pass-current").value = "";
+    $("#own-pass-new").value = "";
+    $("#own-pass-confirm").value = "";
+    ok.classList.remove("d-none");
   }
 
   function removeUser(id) {
@@ -1042,9 +1245,9 @@
     $("#btn-show-history").addEventListener("click", showPersonHistory);
     $("#history-member").addEventListener("change", showPersonHistory);
 
-    $("#btn-add-user").addEventListener("click", () => {
+    $("#btn-add-user").addEventListener("click", async () => {
       if (
-        addUser(
+        await addUser(
           $("#new-user-name").value,
           $("#new-user-pass").value,
           $("#new-user-admin").checked
@@ -1059,6 +1262,9 @@
       await loadFromRemoteOrLocal();
       renderLogs();
     });
+    $("#btn-change-own-pass").addEventListener("click", () => changeOwnPassword());
+    $("#btn-admin-set-pass").addEventListener("click", () => adminSetPassword());
+    $("#btn-admin-set-pass-cancel").addEventListener("click", hideAdminSetPass);
 
     currentUser = loadSession();
     if (currentUser) showApp();

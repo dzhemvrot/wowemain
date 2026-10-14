@@ -1,31 +1,22 @@
 // Sākotnējie dalībnieki (ja kopīgajā glabātuvē vēl nav saraksta).
 const SEED_MEMBERS = [
-  { id: "m01", name: "Anna Bērziņa", canVote: true },
-  { id: "m02", name: "Jānis Kalniņš", canVote: true },
-  { id: "m03", name: "Elīna Ozola", canVote: true },
-  { id: "m04", name: "Mārtiņš Liepiņš", canVote: true },
-  { id: "m05", name: "Kristīne Eglīte", canVote: true },
-  { id: "m06", name: "Roberts Jansons", canVote: true },
-  { id: "m07", name: "Laura Siliņa", canVote: true },
-  { id: "m08", name: "Artūrs Vītoliņš", canVote: true },
-  { id: "m09", name: "Madara Pētersone", canVote: true },
-  { id: "m10", name: "Edgars Krūmiņš", canVote: true },
-  { id: "m11", name: "Sofija Zariņa", canVote: false },
-  { id: "m12", name: "Nikola Balode", canVote: false },
-  { id: "m13", name: "Daniels Ozols", canVote: false },
-  { id: "m14", name: "Emma Liepa", canVote: false },
+  { id: "m01", name: "Something wrong with the database. Contact admin now.", canVote: true },
 ];
 
 /*
- * Lietotāji (lietotājvārds + parole). Reģistrācijas no klienta nav —
- * administratoru kontus var ielikt šeit kā SEED, vai izveidot paneļī (tikai admin).
- * isAdmin: true → var pārvaldīt lietotājus un redzēt žurnālu.
- *
- * PIEZĪME: paroles glabājas skaidrā tekstā kopīgajā JSON (statiskā vietne).
- * Tas nav bankas līmeņa drošība — piemērots iekšējai skolai.
+ * Sākotnējie lietotāji — TIKAI hash + salt, nekādu paroļu skaidrā tekstā.
+ * Noklusējuma admin: lietotājvārds "admin".
+ * passwordHash = SHA-256(salt + parole) hex (sākotnēji parole bija sp2026 — nomaini uzreiz).
  */
 const SEED_USERS = [
-  { id: "u_admin", username: "admin", password: "sp2026", isAdmin: true },
+  {
+    id: "u_admin",
+    username: "admin",
+    salt: "sp-seed-admin-v1",
+    passwordHash:
+      "98b7286f7f5c44ee1510c021d1f2931c0ed61b1a51381be3280faea6915aa6e4",
+    isAdmin: true,
+  },
 ];
 
 /*

@@ -118,6 +118,7 @@
         <li class="nav-item"><button type="button" class="nav-link active" data-tab="tab-attendance">Apmeklējums</button></li>
         <li class="nav-item"><button type="button" class="nav-link" data-tab="tab-history">Personas vēsture</button></li>
         <li class="nav-item"><button type="button" class="nav-link" data-tab="tab-members">Dalībnieki</button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-tab="tab-account">Mans konts</button></li>
         <li class="nav-item admin-only d-none"><button type="button" class="nav-link" data-tab="tab-users">Lietotāji</button></li>
         <li class="nav-item admin-only d-none"><button type="button" class="nav-link" data-tab="tab-logs">Žurnāls</button></li>
       </ul>
@@ -301,12 +302,44 @@
         </div>
       </div>
 
+      <!-- TAB: Own account -->
+      <div id="tab-account" class="tab-panel d-none">
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <h2 class="h5 mb-3">Mans konts — paroles maiņa</h2>
+            <p class="text-muted small">Parole tiek saglabāta kā SHA-256 hash ar sāli (ne skaidrā tekstā).</p>
+            <div class="row g-2" style="max-width: 420px;">
+              <div class="col-12">
+                <label class="form-label small" for="own-pass-current">Pašreizējā parole</label>
+                <input type="password" class="form-control" id="own-pass-current" autocomplete="current-password">
+              </div>
+              <div class="col-12">
+                <label class="form-label small" for="own-pass-new">Jaunā parole</label>
+                <input type="password" class="form-control" id="own-pass-new" autocomplete="new-password">
+              </div>
+              <div class="col-12">
+                <label class="form-label small" for="own-pass-confirm">Apstiprini jauno paroli</label>
+                <input type="password" class="form-control" id="own-pass-confirm" autocomplete="new-password">
+              </div>
+              <div class="col-12">
+                <button type="button" class="btn btn-primary" id="btn-change-own-pass">Mainīt paroli</button>
+                <div class="form-text text-danger d-none" id="own-pass-error"></div>
+                <div class="form-text text-success d-none" id="own-pass-ok">Parole nomainīta.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- TAB: Users (admin) -->
       <div id="tab-users" class="tab-panel d-none">
         <div class="card shadow-sm mb-4">
           <div class="card-body">
             <h2 class="h5 mb-3">Lietotāji (tikai administrators)</h2>
-            <p class="text-muted small">Jauni konti nav reģistrējami publiski — tos izveido administrators šeit.</p>
+            <p class="text-muted small">
+              Jauni konti nav reģistrējami publiski. Paroles netiek rādītas skaidrā tekstā.
+              Citu administratoru paroles var mainīt tikai galvenais konts <strong>admin</strong>.
+            </p>
             <div class="row g-2 align-items-end mb-3">
               <div class="col-md-3">
                 <label class="form-label small mb-1" for="new-user-name">Lietotājvārds</label>
@@ -314,7 +347,7 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label small mb-1" for="new-user-pass">Parole</label>
-                <input type="text" class="form-control" id="new-user-pass" autocomplete="off">
+                <input type="password" class="form-control" id="new-user-pass" autocomplete="new-password">
               </div>
               <div class="col-md-3">
                 <div class="form-check mt-4">
@@ -338,6 +371,24 @@
                 <tbody id="users-list"></tbody>
               </table>
             </div>
+          </div>
+        </div>
+
+        <!-- Admin set password modal-ish card -->
+        <div class="card shadow-sm mb-4 d-none" id="admin-set-pass-card">
+          <div class="card-body">
+            <h3 class="h6">Iestatīt paroli lietotājam: <span id="admin-set-pass-user"></span></h3>
+            <div class="row g-2 align-items-end" style="max-width: 420px;">
+              <div class="col-md-8">
+                <label class="form-label small" for="admin-set-pass-input">Jaunā parole</label>
+                <input type="password" class="form-control" id="admin-set-pass-input" autocomplete="new-password">
+              </div>
+              <div class="col-md-4">
+                <button type="button" class="btn btn-primary w-100" id="btn-admin-set-pass">Saglabāt</button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-link btn-sm px-0 mt-2" id="btn-admin-set-pass-cancel">Atcelt</button>
+            <div class="form-text text-danger d-none" id="admin-set-pass-error"></div>
           </div>
         </div>
       </div>
