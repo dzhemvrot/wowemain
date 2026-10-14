@@ -264,18 +264,23 @@
         <div class="card shadow-sm mb-4">
           <div class="card-body">
             <h2 class="h5 mb-3">Dalībnieki</h2>
+            <p class="text-muted small">Pievienošanās datums: ja nav norādīts, persona skaitās no paša sākuma (esošie dalībnieki paliek kā ir).</p>
             <div class="row g-2 align-items-end mb-3">
-              <div class="col-md-5">
+              <div class="col-md-4">
                 <label class="form-label small mb-1" for="new-member-name">Vārds, uzvārds</label>
                 <input type="text" class="form-control" id="new-member-name" placeholder="Piem. Ieva Ozola">
               </div>
               <div class="col-md-3">
+                <label class="form-label small mb-1" for="new-member-joined">Pievienojās no</label>
+                <input type="date" class="form-control" id="new-member-joined">
+              </div>
+              <div class="col-md-2">
                 <div class="form-check mt-4">
                   <input class="form-check-input" type="checkbox" id="new-member-vote" checked>
-                  <label class="form-check-label" for="new-member-vote">Ar balsstiesībām</label>
+                  <label class="form-check-label" for="new-member-vote">Balsstiesības</label>
                 </div>
               </div>
-              <div class="col-md-4">
+              <div class="col-md-3">
                 <button type="button" class="btn btn-primary w-100" id="btn-add-member">+ Pievienot</button>
               </div>
             </div>
@@ -285,6 +290,7 @@
                   <tr>
                     <th>Vārds</th>
                     <th>Balsstiesības</th>
+                    <th>Pievienojās no</th>
                     <th class="text-end">Darbības</th>
                   </tr>
                 </thead>

@@ -21,6 +21,7 @@
     add_member: "Pievienoja dalībnieku",
     remove_member: "Dzēsa dalībnieku",
     toggle_vote: "Mainīja balsstiesības",
+    set_joined: "Mainīja pievienošanās datumu",
     add_user: "Pievienoja lietotāju",
     remove_user: "Dzēsa lietotāju",
     export_csv: "Eksportēja CSV",
@@ -216,11 +217,27 @@
 
   function normalizeMember(m) {
     if (!m || !m.name) return null;
+    const joinedOn =
+      m.joinedOn && /^\d{4}-\d{2}-\d{2}$/.test(String(m.joinedOn))
+        ? String(m.joinedOn)
+        : null; // null = no join date → eligible for all past dates
     return {
       id: m.id || newId("m"),
       name: String(m.name).trim(),
       canVote: !!m.canVote,
+      joinedOn,
     };
+  }
+
+  /** Member counts for a meeting date if they had already joined (or never had a join date). */
+  function isMemberActiveOn(m, dateStr) {
+    if (!m) return false;
+    if (!m.joinedOn) return true;
+    return m.joinedOn <= dateStr;
+  }
+
+  function membersForDate(dateStr) {
+    return membersCache.filter((m) => isMemberActiveOn(m, dateStr));
   }
 
   function normalizeUser(u) {
@@ -235,7 +252,12 @@
 
   function cloneSeedMembers() {
     const seed = typeof SEED_MEMBERS !== "undefined" ? SEED_MEMBERS : [];
-    return seed.map((m) => ({ id: m.id, name: m.name, canVote: !!m.canVote }));
+    return seed.map((m) => ({
+      id: m.id,
+      name: m.name,
+      canVote: !!m.canVote,
+      joinedOn: m.joinedOn || null,
+    }));
   }
 
   function cloneSeedUsers() {
@@ -479,25 +501,62 @@
   }
 
   // ---------- Members ----------
-  function voters() {
-    return membersCache.filter((m) => m.canVote);
+  function voters(dateStr) {
+    const list = dateStr ? membersForDate(dateStr) : membersCache;
+    return list.filter((m) => m.canVote);
   }
 
-  function nonVoters() {
-    return membersCache.filter((m) => !m.canVote);
+  function nonVoters(dateStr) {
+    const list = dateStr ? membersForDate(dateStr) : membersCache;
+    return list.filter((m) => !m.canVote);
   }
 
-  function addMember(name, canVote) {
+  function addMember(name, canVote, joinedOn) {
     const n = String(name || "").trim();
     if (!n) return false;
-    membersCache.push({ id: newId("m"), name: n, canVote: !!canVote });
+    let join = joinedOn && /^\d{4}-\d{2}-\d{2}$/.test(joinedOn) ? joinedOn : null;
+    // Default new members to today so they don't appear on older meetings
+    if (!join) join = toISODate(new Date());
+    membersCache.push({
+      id: newId("m"),
+      name: n,
+      canVote: !!canVote,
+      joinedOn: join,
+    });
     membersCache.sort((a, b) => a.name.localeCompare(b.name, "lv"));
-    addLog("add_member", n + (canVote ? " (balsstiesības)" : ""));
+    addLog(
+      "add_member",
+      n +
+        (canVote ? " (balsstiesības)" : "") +
+        " no " +
+        formatLatvianDate(join)
+    );
     scheduleSave();
     renderMembersList();
     fillHistorySelect();
     if (currentDate) openDate(currentDate, true);
     return true;
+  }
+
+  function setMemberJoinedOn(id, joinedOn) {
+    const m = membersCache.find((x) => x.id === id);
+    if (!m) return;
+    if (!joinedOn) {
+      m.joinedOn = null;
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(joinedOn)) {
+      m.joinedOn = joinedOn;
+    } else {
+      return;
+    }
+    addLog(
+      "set_joined",
+      m.name +
+        " · " +
+        (m.joinedOn ? formatLatvianDate(m.joinedOn) : "no sākuma")
+    );
+    scheduleSave();
+    renderMembersList();
+    if (currentDate) openDate(currentDate, true);
   }
 
   function removeMember(id) {
@@ -528,9 +587,13 @@
     tbody.innerHTML = "";
     membersCache.forEach((m) => {
       const tr = document.createElement("tr");
+      const joinVal = m.joinedOn || "";
       tr.innerHTML = `
         <td>${escapeHtml(m.name)}</td>
         <td>${m.canVote ? "Jā" : "Nē"}</td>
+        <td>
+          <input type="date" class="form-control form-control-sm joined-input" data-id="${escapeHtml(m.id)}" value="${escapeHtml(joinVal)}" style="max-width:150px" title="Tukšs = no paša sākuma">
+        </td>
         <td class="text-end member-row-actions">
           <button type="button" class="btn btn-outline-secondary btn-sm btn-toggle-vote" data-id="${escapeHtml(m.id)}">
             ${m.canVote ? "Noņemt balsstiesības" : "Dot balsstiesības"}
@@ -545,6 +608,11 @@
     });
     tbody.querySelectorAll(".btn-toggle-vote").forEach((btn) => {
       btn.addEventListener("click", () => toggleVote(btn.dataset.id));
+    });
+    tbody.querySelectorAll(".joined-input").forEach((input) => {
+      input.addEventListener("change", () => {
+        setMemberJoinedOn(input.dataset.id, input.value || null);
+      });
     });
   }
 
@@ -605,10 +673,10 @@
     return s;
   }
 
-  // ---------- Quorum ----------
+  // ---------- Quorum (only members already joined by that date) ----------
   function computeQuorum(dateStr) {
     const day = getDayAttendance(dateStr);
-    const voting = voters();
+    const voting = voters(dateStr);
     const total = voting.length;
     let present = 0;
     let excused = 0;
@@ -712,8 +780,8 @@
     $("#attendance-view").classList.remove("d-none");
 
     const day = getDayAttendance(dateStr);
-    const v = voters();
-    const nv = nonVoters();
+    const v = voters(dateStr);
+    const nv = nonVoters(dateStr);
     $("#count-voters").textContent = v.length;
     $("#count-nonvoters").textContent = nv.length;
     renderTable($("#table-voters"), v, day);
@@ -730,7 +798,8 @@
   function setAllStatus(status) {
     if (!currentDate) return;
     if (!attendanceCache[currentDate]) attendanceCache[currentDate] = {};
-    membersCache.forEach((m) => {
+    // Only members who had already joined by this date
+    membersForDate(currentDate).forEach((m) => {
       attendanceCache[currentDate][m.id] = status;
     });
     addLog(
@@ -779,7 +848,10 @@
       return;
     }
     result.classList.remove("d-none");
-    $("#history-title").textContent = member.name;
+    const joinNote = member.joinedOn
+      ? " (no " + formatLatvianDate(member.joinedOn) + ")"
+      : " (no sākuma)";
+    $("#history-title").textContent = member.name + joinNote;
 
     const dates = Object.keys(attendanceCache).sort().reverse();
     const rows = [];
@@ -787,6 +859,8 @@
     let cAbsent = 0;
     let cExcused = 0;
     dates.forEach((dateStr) => {
+      // Skip days before this person joined
+      if (!isMemberActiveOn(member, dateStr)) return;
       const st = (attendanceCache[dateStr] || {})[id];
       if (!st) return;
       if (st === "present") cPresent++;
@@ -831,7 +905,7 @@
         .map(csvEscape)
         .join(","),
     ];
-    [...voters(), ...nonVoters()].forEach((m) => {
+    [...voters(dateStr), ...nonVoters(dateStr)].forEach((m) => {
       rows.push(
         [
           formatLatvianDate(dateStr),
@@ -853,10 +927,9 @@
         .map(csvEscape)
         .join(","),
     ];
-    const ordered = [...voters(), ...nonVoters()];
     dates.forEach((dateStr) => {
       const day = getDayAttendance(dateStr);
-      ordered.forEach((m) => {
+      [...voters(dateStr), ...nonVoters(dateStr)].forEach((m) => {
         if (!day[m.id]) return;
         rows.push(
           [
@@ -941,9 +1014,22 @@
     $("#btn-export-all-csv").addEventListener("click", exportAll);
     $("#btn-refresh").addEventListener("click", manualRefresh);
 
+    // Default join date for new members = today
+    const joinedInput = $("#new-member-joined");
+    if (joinedInput && !joinedInput.value) {
+      joinedInput.value = toISODate(new Date());
+    }
+
     $("#btn-add-member").addEventListener("click", () => {
-      if (addMember($("#new-member-name").value, $("#new-member-vote").checked)) {
+      if (
+        addMember(
+          $("#new-member-name").value,
+          $("#new-member-vote").checked,
+          $("#new-member-joined").value
+        )
+      ) {
         $("#new-member-name").value = "";
+        $("#new-member-joined").value = toISODate(new Date());
         $("#new-member-name").focus();
       } else {
         alert("Ievadi vārdu un uzvārdu.");
