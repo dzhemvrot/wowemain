@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="lv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Skolēnu pašpārvaldes apmeklējuma uzskaite">
+  <meta name="theme-color" content="#841414">
+  <meta name="robots" content="noindex, nofollow">
+  <title>SP — Apmeklējums</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="../style.css">
+  <style>
+    .login-card { max-width: 380px; margin: 4rem auto; }
+    .quorum-box {
+      border-radius: 0.5rem;
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+    }
+    .quorum-ok { background: #d1e7dd; border: 1px solid #a3cfbb; color: #0f5132; }
+    .quorum-fail { background: #f8d7da; border: 1px solid #f1aeb5; color: #842029; }
+    .attendance-table th { white-space: nowrap; }
+    .attendance-table td, .attendance-table th { vertical-align: middle; }
+    .date-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 2rem;
+      padding: 0.35rem 0.9rem;
+      font-weight: 500;
+    }
+    #calendar-view .form-control { max-width: 280px; }
+    .btn-present.active, .btn-check:checked + .btn-present {
+      background-color: #198754; border-color: #198754; color: #fff;
+    }
+    .btn-absent.active, .btn-check:checked + .btn-absent {
+      background-color: #dc3545; border-color: #dc3545; color: #fff;
+    }
+    .btn-excused.active, .btn-check:checked + .btn-excused {
+      background-color: #fd7e14; border-color: #fd7e14; color: #fff;
+    }
+    .btn-outline-excused {
+      color: #fd7e14;
+      border-color: #fd7e14;
+    }
+    .btn-outline-excused:hover {
+      background-color: #fd7e14;
+      border-color: #fd7e14;
+      color: #fff;
+    }
+    .section-title {
+      font-size: 1.15rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .badge-count { font-size: 0.8rem; }
+    .member-row-actions { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+
+    <!-- LOGIN -->
+    <div id="login-view">
+      <div class="card shadow-sm login-card">
+        <div class="card-body p-4">
+          <h1 class="h4 mb-1 text-center">Skolēnu pašpārvalde</h1>
+          <p class="text-muted text-center small mb-4">Apmeklējuma uzskaite</p>
+          <div class="mb-3">
+            <label for="password-input" class="form-label">Parole</label>
+            <input type="password" class="form-control" id="password-input" autocomplete="current-password" placeholder="Ievadi paroli">
+            <div class="form-text text-danger d-none" id="login-error">Nepareiza parole.</div>
+          </div>
+          <button type="button" class="btn btn-primary w-100" id="btn-login">Ienākt</button>
+        </div>
+      </div>
+      <!-- p class="text-center text-muted small mt-3">
+        <a href="../index.html" class="text-muted">← Atpakaļ uz sākumlapu</a>
+      </p -->
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="app-view" class="d-none">
+      <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+          <h1 class="h3 mb-0">Apmeklējuma uzskaite</h1>
+          <p class="text-muted small mb-0">Skolēnu pašpārvalde</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span id="sync-status" class="badge bg-secondary">💾 Tikai šajā ierīcē</span>
+          <button type="button" class="btn btn-outline-primary btn-sm" id="btn-refresh" title="Pārlādēt">↻ Atjaunot</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-logout">Iziet</button>
+        </div>
+      </div>
+
+      <!-- Members management (always visible when logged in) -->
+      <div class="card shadow-sm mb-4" id="members-card">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <h2 class="h5 mb-0">Dalībnieki</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-toggle-members">Rādīt / paslēpt</button>
+          </div>
+          <div id="members-panel">
+            <div class="row g-2 align-items-end mb-3">
+              <div class="col-md-5">
+                <label class="form-label small mb-1" for="new-member-name">Vārds, uzvārds</label>
+                <input type="text" class="form-control" id="new-member-name" placeholder="Piem. Ieva Ozola">
+              </div>
+              <div class="col-md-3">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" id="new-member-vote" checked>
+                  <label class="form-check-label" for="new-member-vote">Ar balsstiesībām</label>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <button type="button" class="btn btn-primary w-100" id="btn-add-member">+ Pievienot</button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Vārds</th>
+                    <th>Balsstiesības</th>
+                    <th class="text-end">Darbības</th>
+                  </tr>
+                </thead>
+                <tbody id="members-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date selection -->
+      <div id="calendar-view" class="card shadow-sm mb-4">
+        <div class="card-body">
+          <label for="date-input" class="form-label fw-semibold">Izvēlies datumu</label>
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <input type="date" class="form-control" id="date-input">
+            <button type="button" class="btn btn-primary" id="btn-load-date">Atvērt</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-today">Šodien</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attendance panel -->
+      <div id="attendance-view" class="d-none">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <div class="date-chip">
+            <span>📅</span>
+            <span id="selected-date-label"></span>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-success btn-sm" id="btn-export-csv">⬇ Eksportēt CSV</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-change-date">← Cits datums</button>
+          </div>
+        </div>
+
+        <div id="quorum-panel" class="mb-4">
+          <div class="row g-2">
+            <div class="col-md-6">
+              <div id="quorum-50" class="quorum-box quorum-fail">
+                <strong>&gt; 50% kvorums:</strong>
+                <span id="quorum-50-text">—</span>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div id="quorum-23" class="quorum-box quorum-fail">
+                <strong>2/3 kvorums:</strong>
+                <span id="quorum-23-text">—</span>
+              </div>
+            </div>
+          </div>
+          <p class="small text-muted mt-2 mb-0" id="quorum-detail"></p>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <div class="section-title">
+              <span>🗳️ Ar balsstiesībām</span>
+              <span class="badge bg-secondary badge-count" id="count-voters"></span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-hover attendance-table mb-0">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Vārds, uzvārds</th>
+                    <th class="text-end">Statuss</th>
+                  </tr>
+                </thead>
+                <tbody id="table-voters"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <div class="section-title">
+              <span>👥 Bez balsstiesībām</span>
+              <span class="badge bg-secondary badge-count" id="count-nonvoters"></span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-hover attendance-table mb-0">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Vārds, uzvārds</th>
+                    <th class="text-end">Statuss</th>
+                  </tr>
+                </thead>
+                <tbody id="table-nonvoters"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <button type="button" class="btn btn-success btn-sm" id="btn-all-present">Visi klāt</button>
+          <button type="button" class="btn btn-outline-danger btn-sm" id="btn-all-absent">Visi nav</button>
+          <button type="button" class="btn btn-outline-warning btn-sm" id="btn-all-excused" style="border-color:#fd7e14;color:#fd7e14;">Visi ar attaisnojumu</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-day">Notīrīt dienu</button>
+          <button type="button" class="btn btn-outline-success btn-sm" id="btn-export-all-csv">⬇ Eksportēt visu vēsturi (CSV)</button>
+        </div>
+
+        <p class="text-muted small mb-0">
+          Statusi: <strong class="text-success">Klāt</strong> ·
+          <strong class="text-danger">Nav</strong> ·
+          <strong style="color:#fd7e14">Attaisnoti</strong> (nav klāt ar iemeslu).
+          Kvorumā skaitās tikai «Klāt».
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
