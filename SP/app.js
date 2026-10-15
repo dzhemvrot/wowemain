@@ -28,6 +28,9 @@
     admin_set_password: "Iestatīja lietotāja paroli",
     export_csv: "Eksportēja CSV",
     export_all_csv: "Eksportēja vēsturi CSV",
+    public_open: "Atvēra publisko reģistrāciju",
+    public_close: "Aizvēra publisko reģistrāciju",
+    public_checkin: "Publiska apstiprināšana",
   };
 
   const MIN_PASSWORD_LEN = 6;
@@ -93,6 +96,12 @@
   let attendanceCache = {};
   let usersCache = [];
   let logsCache = [];
+  let publicSessionCache = {
+    open: false,
+    date: null,
+    openedBy: null,
+    openedAt: null,
+  };
   let saveTimer = null;
   let remoteEnabled = false;
   let syncState = "idle";
@@ -149,6 +158,7 @@
     await migrateLegacyPasswordsInStore();
     renderMembersList();
     fillHistorySelect();
+    updatePublicSessionUI();
     if (currentUser && currentUser.isAdmin) {
       renderUsersList();
       renderLogs();
@@ -283,7 +293,12 @@
       attendance: attendanceCache,
       users: usersCache,
       logs: logsCache.slice(-MAX_LOGS),
+      publicSession: publicSessionCache,
     };
+  }
+
+  function emptyPublicSession() {
+    return { open: false, date: null, openedBy: null, openedAt: null };
   }
 
   function applyPayload(data) {
@@ -292,6 +307,7 @@
       attendanceCache = {};
       usersCache = cloneSeedUsers();
       logsCache = [];
+      publicSessionCache = emptyPublicSession();
       return;
     }
     if (!data.members && !data.attendance && !data.users) {
@@ -301,6 +317,7 @@
         membersCache = cloneSeedMembers();
         usersCache = cloneSeedUsers();
         logsCache = [];
+        publicSessionCache = emptyPublicSession();
         return;
       }
     }
@@ -316,6 +333,15 @@
       ? data.users.map(normalizeUser).filter(Boolean)
       : [];
     logsCache = Array.isArray(data.logs) ? data.logs : [];
+    publicSessionCache =
+      data.publicSession && typeof data.publicSession === "object"
+        ? {
+            open: !!data.publicSession.open,
+            date: data.publicSession.date || null,
+            openedBy: data.publicSession.openedBy || null,
+            openedAt: data.publicSession.openedAt || null,
+          }
+        : emptyPublicSession();
   }
 
   function normalizeMember(m) {
@@ -437,6 +463,7 @@
       attendance: json.attendance || {},
       users: json.users || [],
       logs: json.logs || [],
+      publicSession: json.publicSession || emptyPublicSession(),
     };
   }
 
@@ -1209,11 +1236,65 @@
     await loadFromRemoteOrLocal();
     renderMembersList();
     fillHistorySelect();
+    updatePublicSessionUI();
     if (currentUser && currentUser.isAdmin) {
       renderUsersList();
       renderLogs();
     }
     if (currentDate) openDate(currentDate, true);
+  }
+
+  // ---------- Public check-in session (for persons on checkin.html) ----------
+  function isPublicOpenForToday() {
+    const today = toISODate(new Date());
+    return !!(
+      publicSessionCache &&
+      publicSessionCache.open &&
+      publicSessionCache.date === today
+    );
+  }
+
+  function updatePublicSessionUI() {
+    const toggle = $("#public-checkin-toggle");
+    const status = $("#public-checkin-status");
+    const linkBox = $("#public-checkin-link-box");
+    if (!toggle) return;
+    const open = isPublicOpenForToday();
+    toggle.checked = open;
+    if (status) {
+      if (open) {
+        status.textContent =
+          "Atvērts šodienai (" +
+          formatLatvianDate(publicSessionCache.date) +
+          ")" +
+          (publicSessionCache.openedBy
+            ? " · " + publicSessionCache.openedBy
+            : "");
+        status.className = "text-success small";
+      } else {
+        status.textContent = "Slēgts — personas redzēs, ka reģistrācija nav pieejama.";
+        status.className = "text-muted small";
+      }
+    }
+    if (linkBox) linkBox.classList.toggle("d-none", !open);
+  }
+
+  function setPublicSessionOpen(open) {
+    const today = toISODate(new Date());
+    if (open) {
+      publicSessionCache = {
+        open: true,
+        date: today,
+        openedBy: currentUser ? currentUser.username : "?",
+        openedAt: new Date().toISOString(),
+      };
+      addLog("public_open", formatLatvianDate(today));
+    } else {
+      publicSessionCache = emptyPublicSession();
+      addLog("public_close", "");
+    }
+    scheduleSave();
+    updatePublicSessionUI();
   }
 
   // ---------- Init ----------
@@ -1247,6 +1328,28 @@
     $("#btn-export-csv").addEventListener("click", exportCurrentDay);
     $("#btn-export-all-csv").addEventListener("click", exportAll);
     $("#btn-refresh").addEventListener("click", manualRefresh);
+
+    const pubToggle = $("#public-checkin-toggle");
+    if (pubToggle) {
+      pubToggle.addEventListener("change", () => {
+        setPublicSessionOpen(pubToggle.checked);
+      });
+    }
+    const copyBtn = $("#btn-copy-checkin-link");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", () => {
+        const url = new URL("checkin.html", window.location.href).href;
+        navigator.clipboard.writeText(url).then(
+          () => {
+            copyBtn.textContent = "Nokopēts!";
+            setTimeout(() => {
+              copyBtn.textContent = "Kopēt saiti";
+            }, 1500);
+          },
+          () => alert(url)
+        );
+      });
+    }
 
     // Default join date for new members = today
     const joinedInput = $("#new-member-joined");

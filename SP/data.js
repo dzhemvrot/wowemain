@@ -1,13 +1,7 @@
-// Sākotnējie dalībnieki (ja kopīgajā glabātuvē vēl nav saraksta).
 const SEED_MEMBERS = [
   { id: "m01", name: "Something wrong with the database. Contact admin now.", canVote: true },
 ];
 
-/*
- * Sākotnējie lietotāji — TIKAI hash + salt, nekādu paroļu skaidrā tekstā.
- * Noklusējuma admin: lietotājvārds "admin".
- * passwordHash = SHA-256(salt + parole) hex (sākotnēji parole bija sp2026 — nomaini uzreiz).
- */
 const SEED_USERS = [
   {
     id: "u_admin",
@@ -19,8 +13,4 @@ const SEED_USERS = [
   },
 ];
 
-/*
- * KOPĪGA DATU GLABĀTUVĒ
- * Pēc google-apps-script.js izmaiņām: Manage deployments → Edit → New version → Deploy
- */
-const REMOTE_URL = "https://script.google.com/macros/s/AKfycbwHxP5UYQaU26B5QzPRsHlCAoM2BMlk9-JAVwJZyUI4rs2_oYFR0QoJannO6kDC1w/exec";
+const REMOTE_URL = "https://script.google.com/macros/s/AKfycbwebjahgC1523770gHgCiAVEAS0Jt1Bx6G-d2kbClhuznbt51jv7oUXGWyXP0a433Jo/exec";
