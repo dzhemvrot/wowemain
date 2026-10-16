@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="lv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Publiska balsošana">
+  <meta name="theme-color" content="#841414">
+  <meta name="robots" content="noindex, nofollow">
+  <title>SP — Balsošana</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="../style.css">
+  <style>
+    .vote-card { max-width: 520px; margin: 2rem auto; }
+    .member-btn { text-align: left; width: 100%; margin-bottom: 0.5rem; }
+    .choice-btn { min-width: 7rem; }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <div class="text-center mb-3">
+      <h1 class="h4 mb-1">Skolēnu pašpārvalde</h1>
+      <p class="text-muted small mb-0">Balsošana</p>
+      <p class="small mt-2 mb-0">
+        <a href="checkin.html">← Apmeklējuma reģistrācija</a>
+      </p>
+    </div>
+
+    <div id="state-loading" class="card shadow-sm vote-card">
+      <div class="card-body text-center p-4"><p class="mb-0">Ielādē…</p></div>
+    </div>
+
+    <div id="state-closed" class="card shadow-sm vote-card d-none">
+      <div class="card-body text-center p-4">
+        <h2 class="h5">Balsošana nav atvērta</h2>
+        <p class="text-muted mb-0">Pašlaik nav aktīvas balsošanas. Pagaidi moderatoru vai pārbaudi vēlāk.</p>
+      </div>
+    </div>
+
+    <div id="state-error" class="card shadow-sm vote-card d-none">
+      <div class="card-body text-center p-4">
+        <h2 class="h5 text-danger">Neizdevās ielādēt</h2>
+        <p class="text-muted" id="error-text">Pārbaudi internetu.</p>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-retry">Mēģināt vēlreiz</button>
+      </div>
+    </div>
+
+    <!-- Vote info + pick name -->
+    <div id="state-open" class="d-none">
+      <div class="card shadow-sm vote-card">
+        <div class="card-body p-4">
+          <h2 class="h5" id="vote-title"></h2>
+          <p class="text-muted small" id="vote-desc"></p>
+          <ul class="small mb-3" id="vote-meta"></ul>
+          <p class="small text-muted" id="vote-progress"></p>
+          <div id="open-tallies" class="mb-3 d-none"></div>
+          <hr>
+          <p class="fw-semibold mb-2">Izvēlies savu vārdu</p>
+          <p class="small text-muted">Balso tikai par sevi. Drīkst mainīt balsi, kamēr balsošana nav slēgta.</p>
+          <div id="member-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cast / change vote -->
+    <div id="state-ballot" class="d-none">
+      <div class="card shadow-sm vote-card">
+        <div class="card-body p-4">
+          <p class="mb-1 text-muted small">Tu balso kā</p>
+          <h2 class="h5" id="ballot-name"></h2>
+          <p class="small" id="ballot-current"></p>
+          <div class="d-flex flex-wrap gap-2 my-3" id="ballot-choices"></div>
+          <button type="button" class="btn btn-primary" id="btn-confirm-vote" disabled>Apstiprināt</button>
+          <button type="button" class="btn btn-link" id="btn-ballot-back">← Atpakaļ</button>
+          <div class="form-text text-danger d-none" id="ballot-error"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="state-done" class="card shadow-sm vote-card d-none">
+      <div class="card-body text-center p-4">
+        <h2 class="h5 text-success">Balss reģistrēta</h2>
+        <p id="done-text" class="mb-2"></p>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-done-back">← Atpakaļ uz sarakstu</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="vote.js"></script>
+</body>
+</html>
