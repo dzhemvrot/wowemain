@@ -37,6 +37,10 @@
     admin_set_vote: "Admin mainīja balsi",
     vote_archive_delete: "Dzēsa balsošanu no arhīva",
     export_vote_csv: "Eksportēja balsošanas CSV",
+    grant_vote: "Piešķīra balsstiesības",
+    set_cv: "Atzīmēja CV",
+    quorum_override: "Turpināja bez kvoruma",
+    export_absence_csv: "Eksportēja apmeklējuma riska CSV",
   };
 
   const MIN_PASSWORD_LEN = 6;
@@ -167,7 +171,9 @@
     renderMembersList();
     fillHistorySelect();
     updatePublicSessionUI();
+    updateLiveQuorumBanner();
     renderVotePanel();
+    renderAbsenceReport();
     if (currentUser && currentUser.isAdmin) {
       renderUsersList();
       renderLogs();
@@ -267,6 +273,11 @@
     if (panel) panel.classList.remove("d-none");
     if (tabId === "tab-history") fillHistorySelect();
     if (tabId === "tab-vote") renderVotePanel();
+    if (tabId === "tab-members") {
+      renderMembersList();
+      renderAbsenceReport();
+    }
+    if (tabId === "tab-attendance") updateLiveQuorumBanner();
     if (tabId === "tab-logs" && currentUser && currentUser.isAdmin) renderLogs();
     if (tabId === "tab-users" && currentUser && currentUser.isAdmin) {
       renderUsersList();
@@ -373,7 +384,131 @@
       name: String(m.name).trim(),
       canVote: !!m.canVote,
       joinedOn,
+      cvSubmitted: !!m.cvSubmitted,
     };
+  }
+
+  /** Distinct meeting dates where member was present (after joinedOn). */
+  function countPresentSessions(memberId) {
+    const m = membersCache.find((x) => x.id === memberId);
+    if (!m) return 0;
+    let n = 0;
+    Object.keys(attendanceCache).forEach((dateStr) => {
+      if (m.joinedOn && dateStr < m.joinedOn) return;
+      if (attendanceCache[dateStr] && attendanceCache[dateStr][memberId] === "present") {
+        n++;
+      }
+    });
+    return n;
+  }
+
+  /**
+   * Rolling window absence stats (default 60 days ≈ 2 months).
+   * Denominator: meeting dates in window where member was already active
+   * and there is any attendance record for that date for any member
+   * (or specifically for them — we count dates that exist in attendanceCache).
+   */
+  function memberAbsenceStats(memberId, windowDays) {
+    windowDays = windowDays || 60;
+    const m = membersCache.find((x) => x.id === memberId);
+    if (!m) {
+      return {
+        meetings: 0,
+        present: 0,
+        excused: 0,
+        absent: 0,
+        pctAbsent: 0,
+        overLimit: false,
+      };
+    }
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(start.getDate() - windowDays);
+    const startIso = toISODate(start);
+    const endIso = toISODate(today);
+    let meetings = 0;
+    let present = 0;
+    let excused = 0;
+    let absent = 0;
+    Object.keys(attendanceCache)
+      .filter((d) => d >= startIso && d <= endIso)
+      .forEach((dateStr) => {
+        if (m.joinedOn && dateStr < m.joinedOn) return;
+        const day = attendanceCache[dateStr] || {};
+        // Count as a meeting day for this member only if they have a status
+        // or the day has any records (session existed)
+        if (!Object.keys(day).length) return;
+        meetings++;
+        const s = day[memberId];
+        if (s === "present") present++;
+        else if (s === "excused") excused++;
+        else if (s === "absent") absent++;
+        else {
+          // no mark for this member on a meeting day → treat as absent for risk?
+          // Safer: only count explicit "absent" toward the 25% rule
+        }
+      });
+    const pctAbsent = meetings > 0 ? (absent / meetings) * 100 : 0;
+    return {
+      meetings,
+      present,
+      excused,
+      absent,
+      pctAbsent,
+      overLimit: meetings > 0 && pctAbsent > 25,
+    };
+  }
+
+  function hasQuorumToday() {
+    const today = toISODate(new Date());
+    return computeQuorum(today).pct50;
+  }
+
+  function updateLiveQuorumBanner() {
+    const banner = $("#live-quorum-banner");
+    const text = $("#live-quorum-text");
+    const detail = $("#live-quorum-detail");
+    if (!banner || !text) return;
+    const today = toISODate(new Date());
+    const q = computeQuorum(today);
+    const needed50 = Math.floor(q.total / 2) + 1;
+    if (q.total === 0) {
+      banner.className = "alert alert-secondary mb-4";
+      text.textContent = "Nav balsojošo dalībnieku šodien.";
+      if (detail)
+        detail.textContent =
+          "Pievieno balsstiesīgos vai atzīmē apmeklējumu.";
+      return;
+    }
+    if (q.pct50) {
+      banner.className = "alert alert-success mb-4";
+      text.textContent =
+        "Lemttiesīga — kvorums ir (>50%: " + q.present + "/" + q.total + ").";
+    } else {
+      banner.className = "alert alert-danger mb-4";
+      text.textContent =
+        "Nav kvoruma — balsojumi nav ieteicami (" +
+        q.present +
+        "/" +
+        q.total +
+        ", vajag ≥" +
+        needed50 +
+        ").";
+    }
+    if (detail) {
+      detail.textContent =
+        "Balsojošie (aktīvi šodien): " +
+        q.total +
+        ". Klāt: " +
+        q.present +
+        ", attaisnoti: " +
+        q.excused +
+        ", nav: " +
+        q.absent +
+        ". 2/3: " +
+        (q.pct23 ? "jā" : "nē") +
+        ".";
+    }
   }
 
   /** Member counts for a meeting date if they had already joined (or never had a join date). */
@@ -411,6 +546,7 @@
       name: m.name,
       canVote: !!m.canVote,
       joinedOn: m.joinedOn || null,
+      cvSubmitted: !!m.cvSubmitted,
     }));
   }
 
@@ -792,7 +928,7 @@
     return list.filter((m) => !m.canVote);
   }
 
-  function addMember(name, canVote, joinedOn) {
+  function addMember(name, canVote, joinedOn, cvSubmitted) {
     const n = String(name || "").trim();
     if (!n) return false;
     let join = joinedOn && /^\d{4}-\d{2}-\d{2}$/.test(joinedOn) ? joinedOn : null;
@@ -803,20 +939,57 @@
       name: n,
       canVote: !!canVote,
       joinedOn: join,
+      cvSubmitted: !!cvSubmitted,
     });
     membersCache.sort((a, b) => a.name.localeCompare(b.name, "lv"));
     addLog(
       "add_member",
       n +
         (canVote ? " (balsstiesības)" : "") +
+        (cvSubmitted ? " (CV)" : "") +
         " no " +
         formatLatvianDate(join)
     );
     scheduleSave();
     renderMembersList();
     fillHistorySelect();
+    updateLiveQuorumBanner();
     if (currentDate) openDate(currentDate, true);
     return true;
+  }
+
+  function setMemberCv(id, submitted) {
+    const m = membersCache.find((x) => x.id === id);
+    if (!m) return;
+    m.cvSubmitted = !!submitted;
+    addLog("set_cv", m.name + " → " + (m.cvSubmitted ? "jā" : "nē"));
+    scheduleSave();
+    renderMembersList();
+  }
+
+  function grantVotingRights(id) {
+    const m = membersCache.find((x) => x.id === id);
+    if (!m) return;
+    const sessions = countPresentSessions(id);
+    if (sessions < 3) {
+      alert(
+        "Nepietiek sēžu («Klāt»): " +
+          sessions +
+          "/3. Balsstiesības pēc Nolikuma piešķir pēc 3 sēdēm."
+      );
+      return;
+    }
+    if (!m.cvSubmitted) {
+      alert("Vispirms atzīmē, ka CV/anketa ir iesniegta.");
+      return;
+    }
+    if (m.canVote) return;
+    m.canVote = true;
+    addLog("grant_vote", m.name + " (sēdes: " + sessions + ", CV: jā)");
+    scheduleSave();
+    renderMembersList();
+    updateLiveQuorumBanner();
+    if (currentDate) openDate(currentDate, true);
   }
 
   function setMemberJoinedOn(id, joinedOn) {
@@ -859,6 +1032,7 @@
     addLog("toggle_vote", m.name + " → " + (m.canVote ? "jā" : "nē"));
     scheduleSave();
     renderMembersList();
+    updateLiveQuorumBanner();
     if (currentDate) openDate(currentDate, true);
   }
 
@@ -869,15 +1043,42 @@
     membersCache.forEach((m) => {
       const tr = document.createElement("tr");
       const joinVal = m.joinedOn || "";
+      const sessions = countPresentSessions(m.id);
+      const abs = memberAbsenceStats(m.id, 60);
+      const ready = sessions >= 3 && m.cvSubmitted && !m.canVote;
+      if (abs.overLimit) tr.classList.add("table-warning");
       tr.innerHTML = `
         <td>${escapeHtml(m.name)}</td>
-        <td>${m.canVote ? "Jā" : "Nē"}</td>
         <td>
-          <input type="date" class="form-control form-control-sm joined-input" data-id="${escapeHtml(m.id)}" value="${escapeHtml(joinVal)}" style="max-width:150px" title="Tukšs = no paša sākuma">
+          <span class="${sessions >= 3 ? "text-success" : ""}">${sessions}/3</span>
+          ${sessions >= 3 ? ' <span class="badge bg-success">gatavs</span>' : ""}
+        </td>
+        <td>
+          <input type="checkbox" class="form-check-input member-cv-cb" data-id="${escapeHtml(m.id)}" ${m.cvSubmitted ? "checked" : ""} title="CV / anketa iesniegta">
+        </td>
+        <td>${m.canVote ? '<span class="text-success">Jā</span>' : "Nē"}</td>
+        <td>
+          ${
+            abs.overLimit
+              ? '<span class="text-danger" title=">25% Nav">⚠ ' +
+                abs.pctAbsent.toFixed(0) +
+                "%</span>"
+              : abs.meetings
+                ? abs.pctAbsent.toFixed(0) + "%"
+                : "—"
+          }
+        </td>
+        <td>
+          <input type="date" class="form-control form-control-sm joined-input" data-id="${escapeHtml(m.id)}" value="${escapeHtml(joinVal)}" style="max-width:140px" title="Tukšs = no paša sākuma">
         </td>
         <td class="text-end member-row-actions">
+          ${
+            ready
+              ? `<button type="button" class="btn btn-success btn-sm btn-grant-vote" data-id="${escapeHtml(m.id)}">Piešķirt balsstiesības</button> `
+              : ""
+          }
           <button type="button" class="btn btn-outline-secondary btn-sm btn-toggle-vote" data-id="${escapeHtml(m.id)}">
-            ${m.canVote ? "Noņemt balsstiesības" : "Dot balsstiesības"}
+            ${m.canVote ? "Noņemt" : "Dot manuāli"}
           </button>
           <button type="button" class="btn btn-outline-danger btn-sm btn-remove-member" data-id="${escapeHtml(m.id)}">Dzēst</button>
         </td>
@@ -890,11 +1091,81 @@
     tbody.querySelectorAll(".btn-toggle-vote").forEach((btn) => {
       btn.addEventListener("click", () => toggleVote(btn.dataset.id));
     });
+    tbody.querySelectorAll(".btn-grant-vote").forEach((btn) => {
+      btn.addEventListener("click", () => grantVotingRights(btn.dataset.id));
+    });
+    tbody.querySelectorAll(".member-cv-cb").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        setMemberCv(cb.dataset.id, cb.checked);
+      });
+    });
     tbody.querySelectorAll(".joined-input").forEach((input) => {
       input.addEventListener("change", () => {
         setMemberJoinedOn(input.dataset.id, input.value || null);
       });
     });
+    renderAbsenceReport();
+  }
+
+  function renderAbsenceReport() {
+    const tbody = $("#absence-report-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    const rows = membersCache
+      .map((m) => ({ m, s: memberAbsenceStats(m.id, 60) }))
+      .sort((a, b) => b.s.pctAbsent - a.s.pctAbsent);
+    if (!rows.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="7" class="text-muted">Nav dalībnieku.</td></tr>';
+      return;
+    }
+    rows.forEach(({ m, s }) => {
+      const tr = document.createElement("tr");
+      if (s.overLimit) tr.classList.add("table-warning");
+      tr.innerHTML = `
+        <td>${escapeHtml(m.name)}</td>
+        <td>${s.meetings}</td>
+        <td>${s.present}</td>
+        <td>${s.excused}</td>
+        <td>${s.absent}</td>
+        <td>${s.meetings ? s.pctAbsent.toFixed(1) + "%" : "—"}</td>
+        <td>${
+          s.overLimit
+            ? '<span class="text-danger">⚠ Virs 25%</span>'
+            : s.meetings
+              ? "OK"
+              : "—"
+        }</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function exportAbsenceReportCsv() {
+    const lines = [
+      ["Vārds", "Sēdes", "Klāt", "Attaisnoti", "Nav", "% Nav", "Brīdinājums"]
+        .map(csvEscape)
+        .join(","),
+    ];
+    membersCache.forEach((m) => {
+      const s = memberAbsenceStats(m.id, 60);
+      lines.push(
+        [
+          m.name,
+          s.meetings,
+          s.present,
+          s.excused,
+          s.absent,
+          s.meetings ? s.pctAbsent.toFixed(1) : "",
+          s.overLimit ? "JĀ >25%" : "",
+        ]
+          .map(csvEscape)
+          .join(",")
+      );
+    });
+    downloadCsv("apmeklejuma_risks_60d.csv", lines.join("\r\n"));
+    addLog("export_absence_csv", "60d");
+    scheduleSave();
   }
 
   // ---------- Attendance ----------
@@ -1032,6 +1303,8 @@
         const memberId = input.name.replace("att-", "");
         setMemberStatus(currentDate, memberId, input.value);
         updateQuorumUI(currentDate);
+        updateLiveQuorumBanner();
+        renderMembersList();
       });
     });
   }
@@ -1257,7 +1530,9 @@
     renderMembersList();
     fillHistorySelect();
     updatePublicSessionUI();
+    updateLiveQuorumBanner();
     renderVotePanel();
+    renderAbsenceReport();
     if (currentUser && currentUser.isAdmin) {
       renderUsersList();
       renderLogs();
@@ -1451,6 +1726,23 @@
     if (!eligible.length) {
       alert("Atzīmē vismaz vienu tiesīgo personu.");
       return;
+    }
+    // Soft quorum block (Reglaments §8) — override allowed & logged
+    if (!hasQuorumToday()) {
+      const q = computeQuorum(toISODate(new Date()));
+      const ok = confirm(
+        "Nav kvoruma šodien (klāt " +
+          q.present +
+          " no " +
+          q.total +
+          " balsstiesīgajiem; vajag >50%).\n\n" +
+          "Vai turpināt bez kvoruma? (tiks ierakstīts žurnālā)"
+      );
+      if (!ok) return;
+      addLog(
+        "quorum_override",
+        "balsošanas sākums bez kvoruma (" + q.present + "/" + q.total + ")"
+      );
     }
     const ballot = $("#vote-ballot-type").value;
     const cfg = {
@@ -1976,16 +2268,23 @@
         addMember(
           $("#new-member-name").value,
           $("#new-member-vote").checked,
-          $("#new-member-joined").value
+          $("#new-member-joined").value,
+          $("#new-member-cv") && $("#new-member-cv").checked
         )
       ) {
         $("#new-member-name").value = "";
         $("#new-member-joined").value = toISODate(new Date());
+        if ($("#new-member-cv")) $("#new-member-cv").checked = false;
+        if ($("#new-member-vote")) $("#new-member-vote").checked = false;
         $("#new-member-name").focus();
       } else {
         alert("Ievadi vārdu un uzvārdu.");
       }
     });
+    const absCsv = $("#btn-absence-report-csv");
+    if (absCsv) {
+      absCsv.addEventListener("click", exportAbsenceReportCsv);
+    }
     $("#new-member-name").addEventListener("keydown", (e) => {
       if (e.key === "Enter") $("#btn-add-member").click();
     });

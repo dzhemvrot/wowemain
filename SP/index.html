@@ -123,6 +123,13 @@
 
       <!-- TAB: Attendance -->
       <div id="tab-attendance" class="tab-panel">
+        <!-- Live quorum for today (canVote members active today) -->
+        <div id="live-quorum-banner" class="alert mb-4" role="status">
+          <strong>Šodienas kvorums:</strong>
+          <span id="live-quorum-text">—</span>
+          <span class="small text-muted d-block mt-1" id="live-quorum-detail"></span>
+        </div>
+
         <!-- Public self check-in control -->
         <div class="card shadow-sm mb-4 border-primary">
           <div class="card-body">
@@ -378,19 +385,28 @@
         <div class="card shadow-sm mb-4">
           <div class="card-body">
             <h2 class="h5 mb-3">Dalībnieki</h2>
-            <p class="text-muted small">Pievienošanās datums: ja nav norādīts, persona skaitās no paša sākuma (esošie dalībnieki paliek kā ir).</p>
+            <p class="text-muted small mb-2">
+              Balsstiesības (Nolikums): vismaz <strong>3 sēdes «Klāt»</strong> + <strong>CV/anketa</strong>, tad prezidijs/admin piešķir.
+              Brīdinājums, ja pēdējos ~2 mēnešos <strong>&gt;25% «Nav»</strong> (bez attaisnojuma).
+            </p>
             <div class="row g-2 align-items-end mb-3">
-              <div class="col-md-4">
+              <div class="col-md-3">
                 <label class="form-label small mb-1" for="new-member-name">Vārds, uzvārds</label>
                 <input type="text" class="form-control" id="new-member-name" placeholder="Piem. Ieva Ozola">
               </div>
-              <div class="col-md-3">
+              <div class="col-md-2">
                 <label class="form-label small mb-1" for="new-member-joined">Pievienojās no</label>
                 <input type="date" class="form-control" id="new-member-joined">
               </div>
               <div class="col-md-2">
                 <div class="form-check mt-4">
-                  <input class="form-check-input" type="checkbox" id="new-member-vote" checked>
+                  <input class="form-check-input" type="checkbox" id="new-member-cv">
+                  <label class="form-check-label" for="new-member-cv">CV iesniegts</label>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <div class="form-check mt-4">
+                  <input class="form-check-input" type="checkbox" id="new-member-vote">
                   <label class="form-check-label" for="new-member-vote">Balsstiesības</label>
                 </div>
               </div>
@@ -399,16 +415,45 @@
               </div>
             </div>
             <div class="table-responsive">
-              <table class="table table-sm table-hover mb-0">
+              <table class="table table-sm table-hover mb-0 align-middle">
                 <thead>
                   <tr>
                     <th>Vārds</th>
-                    <th>Balsstiesības</th>
-                    <th>Pievienojās no</th>
+                    <th>Sēdes (Klāt)</th>
+                    <th>CV</th>
+                    <th>Balsst.</th>
+                    <th>2 mēn.</th>
+                    <th>Pievienojās</th>
                     <th class="text-end">Darbības</th>
                   </tr>
                 </thead>
                 <tbody id="members-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+              <h2 class="h5 mb-0">Apmeklējuma risks (pēdējās 60 dienas)</h2>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-absence-report-csv">⬇ CSV</button>
+            </div>
+            <p class="small text-muted">Sēdes = datumi ar apmeklējuma ierakstu pēc pievienošanās. «Nav» bez attaisnojuma. Brīdinājums, ja &gt;25%.</p>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Vārds</th>
+                    <th>Sēdes</th>
+                    <th>Klāt</th>
+                    <th>Attaisnoti</th>
+                    <th>Nav</th>
+                    <th>% Nav</th>
+                    <th>Statuss</th>
+                  </tr>
+                </thead>
+                <tbody id="absence-report-body"></tbody>
               </table>
             </div>
           </div>
