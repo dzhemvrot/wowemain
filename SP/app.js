@@ -34,6 +34,9 @@
     vote_start: "Sāka balsošanu",
     vote_close: "Slēdza balsošanu",
     cast_vote: "Nobalsoja",
+    admin_set_vote: "Admin mainīja balsi",
+    vote_archive_delete: "Dzēsa balsošanu no arhīva",
+    export_vote_csv: "Eksportēja balsošanas CSV",
   };
 
   const MIN_PASSWORD_LEN = 6;
@@ -1523,8 +1526,34 @@
     renderVotePanel();
   }
 
-  function renderVoteResultsHtml(vote) {
+  function formatAdminVoteMarks(b) {
+    if (!b || !b.adminChanges || !b.adminChanges.length) return "";
+    return b.adminChanges
+      .map((c) => {
+        const when = c.at ? formatLogTime(c.at) : "";
+        const from = c.from ? VOTE_CHOICE_LV[c.from] || c.from : "—";
+        const to = c.to ? VOTE_CHOICE_LV[c.to] || c.to : "—";
+        return (
+          '<div class="small text-warning-emphasis">' +
+          "Admin " +
+          escapeHtml(c.by || "?") +
+          " mainīja " +
+          escapeHtml(from) +
+          " → " +
+          escapeHtml(to) +
+          (when ? " (" + escapeHtml(when) + ")" : "") +
+          "</div>"
+        );
+      })
+      .join("");
+  }
+
+  function renderVoteResultsHtml(vote, opts) {
+    opts = opts || {};
+    const allowAdminEdit = !!(opts.allowAdminEdit && currentUser && currentUser.isAdmin && vote.open);
     const r = vote.results || computeVoteResults(vote);
+    const choices =
+      vote.ballot === "faa" ? ["for", "against", "abstain"] : ["for", "against"];
     const rows = (vote.eligible || [])
       .map((id) => {
         const m = membersCache.find((x) => x.id === id);
@@ -1533,41 +1562,195 @@
         const choice = b && b.choice ? VOTE_CHOICE_LV[b.choice] : "Nav balsojis";
         const hist =
           b && b.history && b.history.length > 1
-            ? " <span class=\"text-muted small\">(mainīts " +
+            ? ' <span class="text-muted small">(personas maiņas: ' +
               (b.history.length - 1) +
               "×)</span>"
             : "";
+        const adminMarks = formatAdminVoteMarks(b);
+        let adminCtrl = "";
+        if (allowAdminEdit) {
+          const optsHtml = choices
+            .map(
+              (ch) =>
+                '<option value="' +
+                ch +
+                '"' +
+                (b && b.choice === ch ? " selected" : "") +
+                ">" +
+                (VOTE_CHOICE_LV[ch] || ch) +
+                "</option>"
+            )
+            .join("");
+          adminCtrl =
+            '<div class="mt-1"><select class="form-select form-select-sm admin-vote-select" data-mid="' +
+            escapeHtml(id) +
+            '" style="max-width:140px;display:inline-block">' +
+            '<option value="">— mainīt —</option>' +
+            optsHtml +
+            "</select> " +
+            '<button type="button" class="btn btn-sm btn-outline-warning btn-admin-set-vote" data-mid="' +
+            escapeHtml(id) +
+            '">Saglabāt</button></div>';
+        }
         return (
           "<tr><td>" +
           escapeHtml(name) +
           "</td><td>" +
           escapeHtml(choice) +
           hist +
+          adminMarks +
+          adminCtrl +
           "</td></tr>"
         );
       })
       .join("");
+    const summaryBadge = vote.open
+      ? ""
+      : `<span class="badge ${r.passed ? "bg-success" : "bg-danger"}">${
+          r.passed ? "PIEŅEMTS" : "NORAIDĪTS"
+        }</span>`;
     return `
       <div class="mb-2">
-        <span class="badge ${r.passed ? "bg-success" : "bg-danger"}">${
-          r.passed ? "PIEŅEMTS" : "NORAIDĪTS"
-        }</span>
-        <span class="small text-muted ms-2">${escapeHtml(r.thresholdLabel)} no ${
-          r.total
-        } (vajag ≥ ${r.minNeeded} «Par»)</span>
-      </div>
-      <p class="small mb-2">
-        Par: <strong>${r.forCount}</strong> (${r.pct}%) ·
-        Pret: <strong>${r.againstCount}</strong> ·
-        Atturas / nav balsojuši: <strong>${r.abstainTotal}</strong>
+        ${summaryBadge}
+        <span class="small text-muted ${vote.open ? "" : "ms-2"}">${escapeHtml(
+          r.thresholdLabel
+        )} no ${r.total} (vajag ≥ ${r.minNeeded} «Par») · Par: <strong>${
+          r.forCount
+        }</strong> (${r.pct}%) · Pret: <strong>${
+          r.againstCount
+        }</strong> · Atturas/nav: <strong>${r.abstainTotal}</strong>
         ${
           vote.ballot === "faa" && vote.abstainAs === "against"
             ? " <span class=\"text-muted\">(atturēšanās skaitās pret)</span>"
             : ""
-        }
-      </p>
+        }</span>
+      </div>
       <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Persona</th><th>Balss</th></tr></thead><tbody>${rows}</tbody></table></div>
     `;
+  }
+
+  function adminSetMemberVote(memberId, newChoice) {
+    if (!currentUser || !currentUser.isAdmin) {
+      alert("Tikai administrators var mainīt balsis.");
+      return;
+    }
+    if (!activeVoteCache || !activeVoteCache.open) {
+      alert("Balsošana nav aktīva.");
+      return;
+    }
+    if (!newChoice) return;
+    if (
+      activeVoteCache.ballot === "fa" &&
+      newChoice === "abstain"
+    ) {
+      alert("Šajā balsošanā nav «Atturas».");
+      return;
+    }
+    if ((activeVoteCache.eligible || []).indexOf(memberId) < 0) return;
+    if (!activeVoteCache.ballots) activeVoteCache.ballots = {};
+    const prev = activeVoteCache.ballots[memberId] || {
+      choice: null,
+      history: [],
+      adminChanges: [],
+    };
+    const from = prev.choice || null;
+    if (from === newChoice) return;
+    if (!prev.history) prev.history = [];
+    prev.history.push({
+      choice: newChoice,
+      ts: new Date().toISOString(),
+      byAdmin: currentUser.username,
+    });
+    if (!prev.adminChanges) prev.adminChanges = [];
+    prev.adminChanges.push({
+      by: currentUser.username,
+      at: new Date().toISOString(),
+      from: from,
+      to: newChoice,
+    });
+    prev.choice = newChoice;
+    activeVoteCache.ballots[memberId] = prev;
+    const m = membersCache.find((x) => x.id === memberId);
+    addLog(
+      "admin_set_vote",
+      (m ? m.name : memberId) +
+        " · " +
+        (from ? VOTE_CHOICE_LV[from] : "—") +
+        " → " +
+        VOTE_CHOICE_LV[newChoice]
+    );
+    scheduleSave();
+    renderVotePanel();
+  }
+
+  function deleteArchiveVote(idx) {
+    if (!currentUser || !currentUser.isAdmin) {
+      alert("Tikai administrators var dzēst no arhīva.");
+      return;
+    }
+    const v = voteArchiveCache[idx];
+    if (!v) return;
+    if (!confirm('Dzēst no arhīva: «' + v.title + '»?')) return;
+    voteArchiveCache.splice(idx, 1);
+    addLog("vote_archive_delete", v.title || v.id || "");
+    scheduleSave();
+    renderVotePanel();
+  }
+
+  function exportVoteCsv(vote) {
+    const r = vote.results || computeVoteResults(vote);
+    const lines = [];
+    lines.push(
+      ["Lauks", "Vērtība"].map(csvEscape).join(",")
+    );
+    lines.push(["Nosaukums", vote.title || ""].map(csvEscape).join(","));
+    lines.push(
+      ["Rezultāts", r.passed ? "PIEŅEMTS" : "NORAIDĪTS"].map(csvEscape).join(",")
+    );
+    lines.push(
+      ["Vairākums", vote.majority === "two_thirds" ? ">2/3" : ">50%"]
+        .map(csvEscape)
+        .join(",")
+    );
+    lines.push(["Par", r.forCount].map(csvEscape).join(","));
+    lines.push(["Pret", r.againstCount].map(csvEscape).join(","));
+    lines.push(
+      ["Atturas/nav balsojuši", r.abstainTotal].map(csvEscape).join(",")
+    );
+    lines.push(["Tiesīgie kopā", r.total].map(csvEscape).join(","));
+    lines.push([]);
+    lines.push(
+      ["Persona", "Balss", "Admin piezīmes"].map(csvEscape).join(",")
+    );
+    (vote.eligible || []).forEach((id) => {
+      const m = membersCache.find((x) => x.id === id);
+      const b = (vote.ballots || {})[id];
+      const choice = b && b.choice ? VOTE_CHOICE_LV[b.choice] : "Nav balsojis";
+      let notes = "";
+      if (b && b.adminChanges && b.adminChanges.length) {
+        notes = b.adminChanges
+          .map((c) => {
+            return (
+              (c.by || "?") +
+              ": " +
+              (c.from ? VOTE_CHOICE_LV[c.from] || c.from : "—") +
+              "→" +
+              (c.to ? VOTE_CHOICE_LV[c.to] || c.to : "—") +
+              (c.at ? " (" + formatLogTime(c.at) + ")" : "")
+            );
+          })
+          .join("; ");
+      }
+      lines.push(
+        [m ? m.name : id, choice, notes].map(csvEscape).join(",")
+      );
+    });
+    const safe =
+      (vote.title || "balsojums").replace(/[^\w\-āčēģīķļņšūž]+/gi, "_") ||
+      "balsojums";
+    downloadCsv(safe + ".csv", lines.join("\r\n"));
+    addLog("export_vote_csv", vote.title || "");
+    scheduleSave();
   }
 
   function renderVotePanel() {
@@ -1599,17 +1782,27 @@
         (activeVoteCache.secret ? "slēgta" : "atvērta") +
         " · " +
         (activeVoteCache.majority === "two_thirds" ? ">2/3" : ">50%");
-      if (!activeVoteCache.secret) {
-        $("#vote-active-live").classList.remove("d-none");
-        $("#vote-active-live").innerHTML = renderVoteResultsHtml(
-          activeVoteCache
-        );
-      } else {
-        $("#vote-active-live").classList.add("d-none");
-        $("#vote-active-live").innerHTML =
-          '<p class="small text-muted mb-0">Slēgta balsošana — detalizēti rezultāti pēc slēgšanas.</p>';
-        $("#vote-active-live").classList.remove("d-none");
-      }
+      // Staff always see full detail (secret only hides choices from the public page)
+      $("#vote-active-live").classList.remove("d-none");
+      $("#vote-active-live").innerHTML = renderVoteResultsHtml(activeVoteCache, {
+        allowAdminEdit: true,
+      });
+      $("#vote-active-live")
+        .querySelectorAll(".btn-admin-set-vote")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const mid = btn.dataset.mid;
+            const sel = $("#vote-active-live").querySelector(
+              'select.admin-vote-select[data-mid="' + mid + '"]'
+            );
+            const val = sel ? sel.value : "";
+            if (!val) {
+              alert("Izvēlies jauno balsi.");
+              return;
+            }
+            adminSetMemberVote(mid, val);
+          });
+        });
     } else {
       activeBox.classList.add("d-none");
       createBox.classList.remove("d-none");
@@ -1627,6 +1820,10 @@
           const r = v.results || computeVoteResults(v);
           const card = document.createElement("div");
           card.className = "border rounded p-3 mb-2";
+          const adminBtns =
+            currentUser && currentUser.isAdmin
+              ? ` <button type="button" class="btn btn-sm btn-outline-danger btn-archive-delete" data-idx="${idx}">Dzēst</button>`
+              : "";
           card.innerHTML = `
             <div class="d-flex justify-content-between flex-wrap gap-2">
               <strong>${escapeHtml(v.title)}</strong>
@@ -1638,6 +1835,8 @@
               v.closedAt ? formatLogTime(v.closedAt) : ""
             } · ${escapeHtml(v.closedBy || "")}</p>
             <button type="button" class="btn btn-sm btn-outline-secondary btn-archive-detail" data-idx="${idx}">Rādīt detaļas</button>
+            <button type="button" class="btn btn-sm btn-outline-success btn-archive-csv" data-idx="${idx}">⬇ CSV</button>
+            ${adminBtns}
             <div class="archive-detail d-none mt-2"></div>
           `;
           archiveBox.appendChild(card);
@@ -1647,13 +1846,27 @@
             const idx = parseInt(btn.dataset.idx, 10);
             const detail = btn.parentElement.querySelector(".archive-detail");
             if (detail.classList.contains("d-none")) {
-              detail.innerHTML = renderVoteResultsHtml(voteArchiveCache[idx]);
+              detail.innerHTML = renderVoteResultsHtml(voteArchiveCache[idx], {
+                allowAdminEdit: false,
+              });
               detail.classList.remove("d-none");
               btn.textContent = "Slēpt";
             } else {
               detail.classList.add("d-none");
               btn.textContent = "Rādīt detaļas";
             }
+          });
+        });
+        archiveBox.querySelectorAll(".btn-archive-csv").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = parseInt(btn.dataset.idx, 10);
+            exportVoteCsv(voteArchiveCache[idx]);
+          });
+        });
+        archiveBox.querySelectorAll(".btn-archive-delete").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = parseInt(btn.dataset.idx, 10);
+            deleteArchiveVote(idx);
           });
         });
       }

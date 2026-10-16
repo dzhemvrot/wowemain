@@ -131,9 +131,14 @@
       btn.type = "button";
       btn.className =
         "btn member-btn " + (has ? "btn-outline-success" : "btn-outline-primary");
-      btn.textContent = has
-        ? m.name + " ✓ (" + (CHOICE_LV[b.choice] || b.choice) + ")"
-        : m.name;
+      // Closed (secret) vote: never reveal others' choices on the public list
+      if (has) {
+        btn.textContent = vote.secret
+          ? m.name + " — Nobalsējis"
+          : m.name + " ✓ (" + (CHOICE_LV[b.choice] || b.choice) + ")";
+      } else {
+        btn.textContent = m.name;
+      }
       btn.addEventListener("click", () => openBallot(m.id));
       list.appendChild(btn);
     });
