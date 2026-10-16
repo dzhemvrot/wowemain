@@ -172,6 +172,8 @@
     fillHistorySelect();
     updatePublicSessionUI();
     updateLiveQuorumBanner();
+    renderMonthCalendar();
+    renderRecordedDatesList();
     renderVotePanel();
     renderAbsenceReport();
     if (currentUser && currentUser.isAdmin) {
@@ -277,7 +279,13 @@
       renderMembersList();
       renderAbsenceReport();
     }
-    if (tabId === "tab-attendance") updateLiveQuorumBanner();
+    if (tabId === "tab-attendance") {
+      updateLiveQuorumBanner();
+      if (!currentDate) {
+        renderMonthCalendar();
+        renderRecordedDatesList();
+      }
+    }
     if (tabId === "tab-logs" && currentUser && currentUser.isAdmin) renderLogs();
     if (tabId === "tab-users" && currentUser && currentUser.isAdmin) {
       renderUsersList();
@@ -1347,6 +1355,154 @@
     currentDate = null;
     $("#attendance-view").classList.add("d-none");
     $("#calendar-view").classList.remove("d-none");
+    renderMonthCalendar();
+    renderRecordedDatesList();
+  }
+
+  // ---------- Month calendar + recorded dates ----------
+  let calViewYear = null;
+  let calViewMonth = null; // 0-11
+
+  function ensureCalViewMonth() {
+    if (calViewYear == null || calViewMonth == null) {
+      const n = new Date();
+      calViewYear = n.getFullYear();
+      calViewMonth = n.getMonth();
+    }
+  }
+
+  function dayHasAttendance(dateStr) {
+    const day = attendanceCache[dateStr];
+    return !!(day && Object.keys(day).length);
+  }
+
+  function dayPresentCount(dateStr) {
+    const day = attendanceCache[dateStr] || {};
+    let n = 0;
+    Object.keys(day).forEach((id) => {
+      if (day[id] === "present") n++;
+    });
+    return n;
+  }
+
+  function shiftCalMonth(delta) {
+    ensureCalViewMonth();
+    calViewMonth += delta;
+    if (calViewMonth < 0) {
+      calViewMonth = 11;
+      calViewYear--;
+    } else if (calViewMonth > 11) {
+      calViewMonth = 0;
+      calViewYear++;
+    }
+    renderMonthCalendar();
+  }
+
+  function renderMonthCalendar() {
+    const grid = $("#month-cal-grid");
+    const label = $("#cal-month-label");
+    if (!grid || !label) return;
+    ensureCalViewMonth();
+    const monthNames = [
+      "Janvāris",
+      "Februāris",
+      "Marts",
+      "Aprīlis",
+      "Maijs",
+      "Jūnijs",
+      "Jūlijs",
+      "Augusts",
+      "Septembris",
+      "Oktobris",
+      "Novembris",
+      "Decembris",
+    ];
+    label.textContent = monthNames[calViewMonth] + " " + calViewYear;
+
+    const todayIso = toISODate(new Date());
+    const first = new Date(calViewYear, calViewMonth, 1);
+    const daysInMonth = new Date(calViewYear, calViewMonth + 1, 0).getDate();
+    // Monday-first: getDay() Sun=0 → 6, Mon=1 → 0
+    let startPad = first.getDay() - 1;
+    if (startPad < 0) startPad = 6;
+
+    const parts = [];
+    ["P", "O", "T", "C", "P", "S", "Sv"].forEach((d) => {
+      parts.push('<div class="dow">' + d + "</div>");
+    });
+    for (let i = 0; i < startPad; i++) {
+      parts.push('<button type="button" class="month-cal-day" disabled></button>');
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const iso =
+        calViewYear +
+        "-" +
+        String(calViewMonth + 1).padStart(2, "0") +
+        "-" +
+        String(day).padStart(2, "0");
+      const has = dayHasAttendance(iso);
+      const isToday = iso === todayIso;
+      let cls = "month-cal-day";
+      if (has) cls += " has-data";
+      if (isToday) cls += " is-today";
+      parts.push(
+        '<button type="button" class="' +
+          cls +
+          '" data-date="' +
+          iso +
+          '">' +
+          day +
+          (has ? '<span class="dot"></span>' : "") +
+          "</button>"
+      );
+    }
+    grid.innerHTML = parts.join("");
+    grid.querySelectorAll("button.month-cal-day[data-date]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        $("#date-input").value = btn.dataset.date;
+        openDate(btn.dataset.date);
+      });
+    });
+  }
+
+  function renderRecordedDatesList() {
+    const box = $("#recorded-dates-list");
+    if (!box) return;
+    const dates = Object.keys(attendanceCache)
+      .filter((d) => dayHasAttendance(d))
+      .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+    if (!dates.length) {
+      box.innerHTML =
+        '<p class="text-muted small mb-0">Vēl nav nevienas sēdes ar ierakstiem. Atver datumu un atzīmē apmeklējumu.</p>';
+      return;
+    }
+    box.innerHTML = "";
+    dates.forEach((d) => {
+      const present = dayPresentCount(d);
+      const q = computeQuorum(d);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className =
+        "btn btn-sm recorded-date-btn " +
+        (q.pct50 ? "btn-outline-success" : "btn-outline-secondary");
+      btn.innerHTML =
+        "<strong>" +
+        escapeHtml(formatLatvianDate(d)) +
+        "</strong> · klāt " +
+        present +
+        (q.total
+          ? " · kvorums " + (q.pct50 ? "jā" : "nē") + " (" + q.present + "/" + q.total + ")"
+          : "");
+      btn.addEventListener("click", () => {
+        $("#date-input").value = d;
+        // Jump calendar view to that month
+        const parts = d.split("-");
+        calViewYear = parseInt(parts[0], 10);
+        calViewMonth = parseInt(parts[1], 10) - 1;
+        openDate(d);
+      });
+      box.appendChild(btn);
+    });
   }
 
   function setAllStatus(status) {
@@ -1531,6 +1687,8 @@
     fillHistorySelect();
     updatePublicSessionUI();
     updateLiveQuorumBanner();
+    renderMonthCalendar();
+    renderRecordedDatesList();
     renderVotePanel();
     renderAbsenceReport();
     if (currentUser && currentUser.isAdmin) {
@@ -2186,9 +2344,16 @@
     $("#btn-today").addEventListener("click", () => {
       const today = toISODate(new Date());
       $("#date-input").value = today;
+      const p = today.split("-");
+      calViewYear = parseInt(p[0], 10);
+      calViewMonth = parseInt(p[1], 10) - 1;
       openDate(today);
     });
     $("#btn-change-date").addEventListener("click", backToCalendar);
+    const btnCalPrev = $("#btn-cal-prev");
+    const btnCalNext = $("#btn-cal-next");
+    if (btnCalPrev) btnCalPrev.addEventListener("click", () => shiftCalMonth(-1));
+    if (btnCalNext) btnCalNext.addEventListener("click", () => shiftCalMonth(1));
     $("#btn-all-present").addEventListener("click", () => setAllStatus("present"));
     $("#btn-all-absent").addEventListener("click", () => setAllStatus("absent"));
     $("#btn-all-excused").addEventListener("click", () => setAllStatus("excused"));
