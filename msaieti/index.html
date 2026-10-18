@@ -114,11 +114,18 @@
           <h2 class="section-title mb-0">
             Dalībnieki un kapitāni
             <span class="badge bg-secondary badge-count" id="people-count">0</span>
+            <span class="badge person-type-participant badge-count ms-1" id="participants-count">0 dal.</span>
+            <span class="badge person-type-captain badge-count" id="captains-count">0 kap.</span>
           </h2>
           <button type="button" class="btn btn-primary btn-sm" id="btn-add-person">+ Pievienot</button>
         </div>
-        <div class="mb-3">
-          <input type="search" class="form-control form-control-sm" id="people-search" placeholder="Meklēt pēc vārda…">
+        <div class="mb-3 d-flex flex-wrap gap-2">
+          <input type="search" class="form-control form-control-sm" style="max-width:280px" id="people-search" placeholder="Meklēt pēc vārda…">
+          <select class="form-select form-select-sm" style="max-width:160px" id="people-filter-type">
+            <option value="">Visi</option>
+            <option value="participant">Tikai dalībnieki</option>
+            <option value="captain">Tikai kapitāni</option>
+          </select>
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle">
@@ -229,25 +236,40 @@
             <input type="text" class="form-control" id="person-name" required>
           </div>
           <div class="mb-3">
-            <label class="form-label">Klase</label>
-            <select class="form-select" id="person-grade">
-              <option value="2">2. klase</option>
-              <option value="3">3. klase</option>
-              <option value="4">4. klase</option>
-            </select>
-          </div>
-          <div class="mb-3">
             <label class="form-label">Tips</label>
             <select class="form-select" id="person-type">
               <option value="participant">Dalībnieks</option>
               <option value="captain">Kapitāns</option>
             </select>
           </div>
-          <div class="mb-3">
+          <div id="person-class-fields">
+            <div class="mb-3">
+              <label class="form-label">Klase</label>
+              <div class="row g-2">
+                <div class="col-6">
+                  <select class="form-select" id="person-grade">
+                    <option value="2">2.</option>
+                    <option value="3">3.</option>
+                    <option value="4">4.</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <select class="form-select" id="person-letter">
+                    <option value="a">a</option>
+                    <option value="b">b</option>
+                    <option value="c">c</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-text">Piemērs: 2.a, 3.b, 4.c</div>
+            </div>
+          </div>
+          <div class="mb-3" id="person-team-group">
             <label class="form-label">Komanda</label>
             <select class="form-select" id="person-team">
               <option value="">— Nav piešķirta —</option>
             </select>
+            <div class="form-text" id="person-team-hint">Kapitānus labāk piešķirt caur komandas rediģēšanu (2 uz komandu).</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -338,7 +360,7 @@
             <label class="form-label">Komandu skaits</label>
             <input type="number" class="form-control" id="gen-teams-count" min="1" max="20" value="10">
           </div>
-          <div class="form-text text-warning">Esošās komandas tiks aizstātas. Dalībnieki tiks atsaistīti no komandām.</div>
+          <div class="form-text text-warning">Esošās komandas tiks aizstātas. Dalībnieki un kapitāni tiks atsaistīti no komandām. Kapitānus pēc tam piešķiriet, rediģējot katru komandu.</div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
@@ -348,7 +370,7 @@
     </div>
   </div>
 
-  <!-- Edit team (mentor) -->
+  <!-- Edit team (mentor + 2 captains) -->
   <div class="modal fade" id="modal-team" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content">
@@ -372,6 +394,21 @@
               <option value="">— Nav —</option>
             </select>
           </div>
+          <hr>
+          <p class="small text-muted mb-2">Katrai komandai nepieciešami <strong>2 kapitāni</strong>.</p>
+          <div class="mb-3">
+            <label class="form-label">1. kapitāns</label>
+            <select class="form-select" id="team-captain1">
+              <option value="">— Izvēlēties —</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">2. kapitāns</label>
+            <select class="form-select" id="team-captain2">
+              <option value="">— Izvēlēties —</option>
+            </select>
+          </div>
+          <div class="form-text text-danger d-none" id="team-captain-error"></div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>

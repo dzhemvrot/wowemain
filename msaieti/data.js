@@ -14,4 +14,5 @@ const SEED_USERS = [
 const SEED_PEOPLE = [];
 const SEED_TEAMS = [];
 
-const REMOTE_URL = "https://script.google.com/macros/s/AKfycbxIH87lOOXN0VpafUYuDk_SWwlk6Q3kUnNb3xBaAvryoixY53eNU4wfxPt1QFOCxicW/exec";
+// After deploying Google Apps Script, paste the /exec URL here.
+const REMOTE_URL = "";

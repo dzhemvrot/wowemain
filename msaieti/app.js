@@ -318,6 +318,13 @@
     return team.name ? `${n}. ${team.name}` : `Komanda ${n}`;
   }
 
+  function classLabel(person) {
+    if (!person || person.type === "captain") return "—";
+    const g = person.grade != null ? person.grade : "?";
+    const l = person.letter || "a";
+    return `${g}.${l}`;
+  }
+
   function getPersonTeamId(personId) {
     for (const t of teamsCache) {
       if ((t.captainIds || []).includes(personId)) return t.id;
@@ -340,10 +347,49 @@
     }
     if (person.type === "captain") {
       if (!team.captainIds) team.captainIds = [];
-      if (!team.captainIds.includes(person.id)) team.captainIds.push(person.id);
+      // Max 2 captains per team
+      if (!team.captainIds.includes(person.id)) {
+        if (team.captainIds.length >= 2) {
+          person.teamId = null;
+          return;
+        }
+        team.captainIds.push(person.id);
+      }
     } else {
       if (!team.participantIds) team.participantIds = [];
       if (!team.participantIds.includes(person.id)) team.participantIds.push(person.id);
+    }
+  }
+
+  /** Assign exactly the given captain ids to a team; clear them from other teams. */
+  function setTeamCaptains(team, captainId1, captainId2) {
+    const ids = [captainId1, captainId2].filter(Boolean);
+    // Remove these people from every team's captain list and clear their teamId if captain
+    for (const t of teamsCache) {
+      const before = (t.captainIds || []).slice();
+      t.captainIds = before.filter((id) => !ids.includes(id));
+    }
+    for (const cid of ids) {
+      const p = peopleCache.find((x) => x.id === cid);
+      if (p) {
+        p.type = "captain";
+        p.teamId = null;
+        p.grade = null;
+        p.letter = null;
+      }
+    }
+    // Clear previous captains of this team (they become unassigned)
+    const prev = (team.captainIds || []).slice();
+    for (const cid of prev) {
+      if (!ids.includes(cid)) {
+        const p = peopleCache.find((x) => x.id === cid);
+        if (p && p.type === "captain") p.teamId = null;
+      }
+    }
+    team.captainIds = ids;
+    for (const cid of ids) {
+      const p = peopleCache.find((x) => x.id === cid);
+      if (p) p.teamId = team.id;
     }
   }
 
@@ -392,6 +438,11 @@
                     ? captains.map((c) => escapeHtml(c.name)).join(", ")
                     : "<span class=\"text-muted\">nav</span>"
                 }
+                ${
+                  captains.length !== 2
+                    ? ' <span class="text-danger small">(jābūt 2)</span>'
+                    : ""
+                }
               </p>
               <p class="small mb-0">
                 <span class="status-pill person-type-participant">Dalībnieki</span>
@@ -400,7 +451,7 @@
               ${
                 participants.length
                   ? `<ul class="small mb-0 mt-1 ps-3">${participants
-                      .map((p) => `<li>${escapeHtml(p.name)} <span class="text-muted">(${p.grade}. kl.)</span></li>`)
+                      .map((p) => `<li>${escapeHtml(p.name)} <span class="text-muted">(${classLabel(p)})</span></li>`)
                       .join("")}</ul>`
                   : ""
               }
@@ -415,13 +466,27 @@
     const tbody = $("#people-tbody");
     const empty = $("#people-empty");
     const q = ($("#people-search").value || "").trim().toLowerCase();
+    const typeFilter = ($("#people-filter-type") && $("#people-filter-type").value) || "";
     let list = [...peopleCache];
+    if (typeFilter) {
+      list = list.filter((p) => p.type === typeFilter);
+    }
     if (q) {
       list = list.filter((p) => (p.name || "").toLowerCase().includes(q));
     }
-    list.sort((a, b) => (a.name || "").localeCompare(b.name || "", "lv"));
+    // Captains first, then by name
+    list.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "captain" ? -1 : 1;
+      return (a.name || "").localeCompare(b.name || "", "lv");
+    });
 
+    const nPart = peopleCache.filter((p) => p.type === "participant").length;
+    const nCap = peopleCache.filter((p) => p.type === "captain").length;
     $("#people-count").textContent = peopleCache.length;
+    const pc = $("#participants-count");
+    const cc = $("#captains-count");
+    if (pc) pc.textContent = nPart + " dal.";
+    if (cc) cc.textContent = nCap + " kap.";
 
     if (!list.length) {
       tbody.innerHTML = "";
@@ -438,7 +503,7 @@
           p.type === "captain" ? "person-type-captain" : "person-type-participant";
         return `<tr>
           <td>${escapeHtml(p.name)}</td>
-          <td>${p.grade}. kl.</td>
+          <td>${escapeHtml(classLabel(p))}</td>
           <td><span class="status-pill ${typeCls}">${TYPE_LABELS[p.type] || p.type}</span></td>
           <td>${team ? escapeHtml(teamLabel(team)) : "—"}</td>
           <td class="table-actions">
@@ -589,43 +654,92 @@
   }
 
   // ---------- Person CRUD ----------
+  function updatePersonFormByType() {
+    const type = $("#person-type").value || "participant";
+    const classFields = $("#person-class-fields");
+    const teamGroup = $("#person-team-group");
+    const teamHint = $("#person-team-hint");
+    if (type === "captain") {
+      if (classFields) classFields.classList.add("d-none");
+      // Captains are assigned via team edit (exactly 2); hide free team picker or keep for convenience
+      if (teamHint) teamHint.classList.remove("d-none");
+    } else {
+      if (classFields) classFields.classList.remove("d-none");
+      if (teamHint) teamHint.classList.add("d-none");
+    }
+  }
+
   function openPersonModal(person) {
     $("#modal-person-title").textContent = person ? "Labot personu" : "Pievienot personu";
     $("#person-edit-id").value = person ? person.id : "";
     $("#person-name").value = person ? person.name : "";
-    $("#person-grade").value = person ? String(person.grade || 3) : "3";
     $("#person-type").value = person ? person.type : "participant";
+    $("#person-grade").value = person && person.grade != null ? String(person.grade) : "3";
+    $("#person-letter").value = person && person.letter ? person.letter : "a";
     fillTeamSelect($("#person-team"), person ? person.teamId : "");
+    updatePersonFormByType();
     bootstrap.Modal.getOrCreateInstance($("#modal-person")).show();
   }
 
   function savePerson() {
     const id = $("#person-edit-id").value;
     const name = ($("#person-name").value || "").trim();
-    const grade = parseInt($("#person-grade").value, 10) || 3;
     const type = $("#person-type").value || "participant";
     const teamId = $("#person-team").value || null;
+    let grade = null;
+    let letter = null;
 
     if (!name) {
       alert("Ievadiet vārdu.");
       return;
     }
 
+    if (type === "participant") {
+      grade = parseInt($("#person-grade").value, 10) || 3;
+      letter = ($("#person-letter").value || "a").toLowerCase();
+      if (!["a", "b", "c"].includes(letter)) letter = "a";
+    }
+
+    // If assigning a captain to a team that already has 2, block
+    if (type === "captain" && teamId) {
+      const team = teamsCache.find((t) => t.id === teamId);
+      if (team) {
+        const existing = (team.captainIds || []).filter((cid) => cid !== id);
+        if (existing.length >= 2) {
+          alert("Šai komandai jau ir 2 kapitāni. Izvēlieties citu komandu vai mainiet kapitānus komandas rediģēšanā.");
+          return;
+        }
+      }
+    }
+
     if (id) {
       const p = peopleCache.find((x) => x.id === id);
       if (!p) return;
+      const wasCaptain = p.type === "captain";
       p.name = name;
-      p.grade = grade;
       p.type = type;
+      p.grade = grade;
+      p.letter = letter;
       p.teamId = teamId;
+      if (type === "captain") {
+        p.grade = null;
+        p.letter = null;
+      }
+      // If changed from captain to participant, remove from captainIds
+      if (wasCaptain && type !== "captain") {
+        for (const t of teamsCache) {
+          t.captainIds = (t.captainIds || []).filter((cid) => cid !== p.id);
+        }
+      }
       syncPersonToTeams(p);
       addLog("edit_person", name);
     } else {
       const p = {
         id: uid("p"),
         name,
-        grade,
         type,
+        grade,
+        letter,
         teamId,
       };
       peopleCache.push(p);
@@ -652,12 +766,51 @@
   }
 
   // ---------- Team CRUD ----------
+  function fillCaptainSelects(team) {
+    const sel1 = $("#team-captain1");
+    const sel2 = $("#team-captain2");
+    const currentIds = team ? (team.captainIds || []).slice() : [];
+    const c1 = currentIds[0] || "";
+    const c2 = currentIds[1] || "";
+    const captains = peopleCache.filter((p) => p.type === "captain");
+
+    function fillOne(sel, selectedId) {
+      sel.innerHTML = '<option value="">— Izvēlēties —</option>';
+      for (const p of captains) {
+        const onTeamId = p.teamId || getPersonTeamId(p.id);
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        let label = p.name;
+        if (onTeamId && team && onTeamId === team.id) {
+          label += " (šī komanda)";
+        } else if (onTeamId) {
+          const other = teamsCache.find((t) => t.id === onTeamId);
+          label += other ? ` (${teamLabel(other)})` : " (cita komanda)";
+        } else {
+          label += " (brīvs)";
+        }
+        opt.textContent = label;
+        if (p.id === selectedId) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
+    fillOne(sel1, c1);
+    fillOne(sel2, c2);
+  }
+
   function openTeamModal(team) {
     $("#modal-team-title").textContent = team ? "Rediģēt komandu" : "Jauna komanda";
     $("#team-edit-id").value = team ? team.id : "";
     $("#team-number").value = team ? team.number : nextTeamNumber();
     $("#team-name").value = team ? team.name || "" : "";
     fillMentorSelect($("#team-mentor"), team ? team.mentorId : "");
+    fillCaptainSelects(team || null);
+    const err = $("#team-captain-error");
+    if (err) {
+      err.classList.add("d-none");
+      err.textContent = "";
+    }
     bootstrap.Modal.getOrCreateInstance($("#modal-team")).show();
   }
 
@@ -671,6 +824,40 @@
     const number = parseInt($("#team-number").value, 10) || 1;
     const name = ($("#team-name").value || "").trim();
     const mentorId = $("#team-mentor").value || null;
+    const cap1 = $("#team-captain1").value || "";
+    const cap2 = $("#team-captain2").value || "";
+    const err = $("#team-captain-error");
+
+    if (!cap1 || !cap2) {
+      if (err) {
+        err.textContent = "Jāizvēlas abi kapitāni (2).";
+        err.classList.remove("d-none");
+      } else {
+        alert("Jāizvēlas abi kapitāni (2).");
+      }
+      return;
+    }
+    if (cap1 === cap2) {
+      if (err) {
+        err.textContent = "Kapitāniem jābūt diviem dažādiem cilvēkiem.";
+        err.classList.remove("d-none");
+      } else {
+        alert("Kapitāniem jābūt diviem dažādiem cilvēkiem.");
+      }
+      return;
+    }
+
+    // Validate both are captains
+    for (const cid of [cap1, cap2]) {
+      const p = peopleCache.find((x) => x.id === cid);
+      if (!p || p.type !== "captain") {
+        if (err) {
+          err.textContent = "Izvēlētajai personai jābūt kapitānam. Vispirms pievienojiet kapitānus sadaļā «Dalībnieki».";
+          err.classList.remove("d-none");
+        }
+        return;
+      }
+    }
 
     if (id) {
       const t = teamsCache.find((x) => x.id === id);
@@ -678,6 +865,7 @@
       t.number = number;
       t.name = name;
       t.mentorId = mentorId;
+      setTeamCaptains(t, cap1, cap2);
       addLog("edit_team", teamLabel(t));
     } else {
       const t = {
@@ -689,6 +877,7 @@
         participantIds: [],
       };
       teamsCache.push(t);
+      setTeamCaptains(t, cap1, cap2);
       addLog("add_team", teamLabel(t));
     }
     scheduleSave();
@@ -911,6 +1100,12 @@
     $("#btn-add-person").addEventListener("click", () => openPersonModal(null));
     $("#btn-person-save").addEventListener("click", savePerson);
     $("#people-search").addEventListener("input", renderPeople);
+    if ($("#people-filter-type")) {
+      $("#people-filter-type").addEventListener("change", renderPeople);
+    }
+    if ($("#person-type")) {
+      $("#person-type").addEventListener("change", updatePersonFormByType);
+    }
 
     $("#btn-add-team").addEventListener("click", () => openTeamModal(null));
     $("#btn-team-save").addEventListener("click", saveTeam);
