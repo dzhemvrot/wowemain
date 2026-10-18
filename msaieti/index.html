@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="lv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Rīgas 22. vidusskolas Mazie Radošie saieti — organizatoru panelis">
+  <meta name="theme-color" content="#841414">
+  <meta name="robots" content="noindex, nofollow">
+  <title>R22VSK — Mazie Radošie saieti</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="../style.css">
+  <style>
+    .login-card { max-width: 400px; margin: 4rem auto; }
+    .section-title {
+      font-size: 1.15rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .badge-count { font-size: 0.8rem; }
+    #user-label { font-size: 0.9rem; }
+    .team-card {
+      border-left: 4px solid #841414;
+    }
+    .person-type-participant { background: #d1e7dd; color: #0f5132; }
+    .person-type-captain { background: #cfe2ff; color: #084298; }
+    .person-type-organizer { background: #fff3cd; color: #664d03; }
+    .person-type-helper { background: #e2e3e5; color: #41464b; }
+    .status-pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 1rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .nav-pills .nav-link { cursor: pointer; }
+    .log-table td { font-size: 0.9rem; }
+    .sync-badge { font-size: 0.75rem; }
+    .table-actions { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+
+    <!-- LOGIN -->
+    <div id="login-view">
+      <div class="card shadow-sm login-card">
+        <div class="card-body p-4">
+          <h1 class="h4 mb-1 text-center">Mazie Radošie saieti</h1>
+          <p class="text-muted text-center small mb-4">Rīgas 22. vidusskola — organizatoru panelis</p>
+          <div class="mb-3">
+            <label for="username-input" class="form-label">Lietotājvārds</label>
+            <input type="text" class="form-control" id="username-input" autocomplete="username" placeholder="Lietotājvārds">
+          </div>
+          <div class="mb-3">
+            <label for="password-input" class="form-label">Parole</label>
+            <input type="password" class="form-control" id="password-input" autocomplete="current-password" placeholder="Parole">
+            <div class="form-text text-danger d-none" id="login-error">Nepareizs lietotājvārds vai parole.</div>
+          </div>
+          <button type="button" class="btn btn-primary w-100" id="btn-login">Ienākt</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="app-view" class="d-none">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+          <h1 class="h4 mb-0">Mazie Radošie saieti</h1>
+          <span class="text-muted small" id="user-label"></span>
+          <span class="badge bg-secondary sync-badge ms-1" id="sync-badge">Lokāli</span>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-change-password">Mainīt paroli</button>
+          <button type="button" class="btn btn-outline-danger btn-sm" id="btn-logout">Iziet</button>
+        </div>
+      </div>
+
+      <ul class="nav nav-pills mb-3" id="main-tabs">
+        <li class="nav-item">
+          <button class="nav-link active" data-tab="tab-teams">Komandas</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-tab="tab-people">Dalībnieki</button>
+        </li>
+        <li class="nav-item admin-only d-none">
+          <button class="nav-link" data-tab="tab-users">Lietotāji</button>
+        </li>
+        <li class="nav-item admin-only d-none">
+          <button class="nav-link" data-tab="tab-logs">Žurnāls</button>
+        </li>
+      </ul>
+
+      <!-- TEAMS TAB -->
+      <div id="tab-teams" class="tab-panel">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h2 class="section-title mb-0">
+            Komandas
+            <span class="badge bg-secondary badge-count" id="teams-count">0</span>
+          </h2>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btn-generate-teams">Ģenerēt N komandas</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-add-team">+ Komanda</button>
+          </div>
+        </div>
+        <div id="teams-list" class="row g-3"></div>
+        <div id="teams-empty" class="text-muted text-center py-4 d-none">Vēl nav nevienas komandas. Izveidojiet tās.</div>
+      </div>
+
+      <!-- PEOPLE TAB -->
+      <div id="tab-people" class="tab-panel d-none">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h2 class="section-title mb-0">
+            Dalībnieki un kapitāni
+            <span class="badge bg-secondary badge-count" id="people-count">0</span>
+          </h2>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-add-person">+ Pievienot</button>
+        </div>
+        <div class="mb-3">
+          <input type="search" class="form-control form-control-sm" id="people-search" placeholder="Meklēt pēc vārda…">
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Vārds</th>
+                <th>Klase</th>
+                <th>Tips</th>
+                <th>Komanda</th>
+                <th class="table-actions"></th>
+              </tr>
+            </thead>
+            <tbody id="people-tbody"></tbody>
+          </table>
+        </div>
+        <div id="people-empty" class="text-muted text-center py-4 d-none">Vēl nav neviena dalībnieka.</div>
+      </div>
+
+      <!-- USERS TAB (admin) -->
+      <div id="tab-users" class="tab-panel d-none">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h2 class="section-title mb-0">
+            Organizatori (lietotāji)
+            <span class="badge bg-secondary badge-count" id="users-count">0</span>
+          </h2>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-add-user">+ Lietotājs</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Lietotājvārds</th>
+                <th>Vārds</th>
+                <th>Loma</th>
+                <th>Admin</th>
+                <th class="table-actions"></th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LOGS TAB (admin) -->
+      <div id="tab-logs" class="tab-panel d-none">
+        <h2 class="section-title">Darbību žurnāls</h2>
+        <div class="table-responsive">
+          <table class="table table-sm log-table">
+            <thead>
+              <tr>
+                <th>Laiks</th>
+                <th>Lietotājs</th>
+                <th>Darbība</th>
+                <th>Detalizācija</th>
+              </tr>
+            </thead>
+            <tbody id="logs-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALS -->
+  <!-- Change own password -->
+  <div class="modal fade" id="modal-change-password" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Mainīt paroli</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Pašreizējā parole</label>
+            <input type="password" class="form-control" id="cp-current">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Jaunā parole</label>
+            <input type="password" class="form-control" id="cp-new" minlength="6">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Atkārtot jauno paroli</label>
+            <input type="password" class="form-control" id="cp-new2" minlength="6">
+          </div>
+          <div class="form-text text-danger d-none" id="cp-error"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="button" class="btn btn-primary" id="btn-cp-save">Saglabāt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / edit person -->
+  <div class="modal fade" id="modal-person" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modal-person-title">Pievienot personu</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="person-edit-id">
+          <div class="mb-3">
+            <label class="form-label">Vārds, uzvārds</label>
+            <input type="text" class="form-control" id="person-name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Klase</label>
+            <select class="form-select" id="person-grade">
+              <option value="2">2. klase</option>
+              <option value="3">3. klase</option>
+              <option value="4">4. klase</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Tips</label>
+            <select class="form-select" id="person-type">
+              <option value="participant">Dalībnieks</option>
+              <option value="captain">Kapitāns</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Komanda</label>
+            <select class="form-select" id="person-team">
+              <option value="">— Nav piešķirta —</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="button" class="btn btn-primary" id="btn-person-save">Saglabāt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / edit user -->
+  <div class="modal fade" id="modal-user" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modal-user-title">Pievienot lietotāju</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="user-edit-id">
+          <div class="mb-3">
+            <label class="form-label">Lietotājvārds</label>
+            <input type="text" class="form-control" id="user-username" required autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Vārds</label>
+            <input type="text" class="form-control" id="user-name">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Loma</label>
+            <select class="form-select" id="user-role">
+              <option value="organizer">Organizators</option>
+              <option value="helper">Palīgs</option>
+            </select>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="user-is-admin">
+            <label class="form-check-label" for="user-is-admin">Administrators</label>
+          </div>
+          <div class="mb-3" id="user-password-group">
+            <label class="form-label">Parole</label>
+            <input type="password" class="form-control" id="user-password" minlength="6" autocomplete="new-password">
+            <div class="form-text">Min. 6 simboli. Rediģējot — atstājiet tukšu, lai nemainītu.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="button" class="btn btn-primary" id="btn-user-save">Saglabāt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin set password for user -->
+  <div class="modal fade" id="modal-admin-password" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Iestatīt paroli</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted" id="ap-target-label"></p>
+          <div class="mb-3">
+            <label class="form-label">Jaunā parole</label>
+            <input type="password" class="form-control" id="ap-new" minlength="6">
+          </div>
+          <div class="form-text text-danger d-none" id="ap-error"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="button" class="btn btn-primary" id="btn-ap-save">Saglabāt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generate teams -->
+  <div class="modal fade" id="modal-generate-teams" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Ģenerēt komandas</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Komandu skaits</label>
+            <input type="number" class="form-control" id="gen-teams-count" min="1" max="20" value="10">
+          </div>
+          <div class="form-text text-warning">Esošās komandas tiks aizstātas. Dalībnieki tiks atsaistīti no komandām.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="button" class="btn btn-warning" id="btn-gen-teams-confirm">Ģenerēt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit team (mentor) -->
+  <div class="modal fade" id="modal-team" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modal-team-title">Rediģēt komandu</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="team-edit-id">
+          <div class="mb-3">
+            <label class="form-label">Numurs</label>
+            <input type="number" class="form-control" id="team-number" min="1">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nosaukums (pēc izvēles)</label>
+            <input type="text" class="form-control" id="team-name" placeholder="Piem. Zvaigznes">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Mentors (organizators)</label>
+            <select class="form-select" id="team-mentor">
+              <option value="">— Nav —</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="button" class="btn btn-primary" id="btn-team-save">Saglabāt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
