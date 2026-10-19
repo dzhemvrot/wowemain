@@ -997,19 +997,16 @@
 
     function pickBagFor(num) {
       teamBags.sort((a, b) => {
-        // 1) Destructors first
+        // Destructor numbers: equalize destr count first
         if (num.isDestructor) {
           if (a.destrCount !== b.destrCount) return a.destrCount - b.destrCount;
-        } else {
-          // Prefer teams that already need more non-destr to keep totals even,
-          // but still respect destructor balance (don't overload a team that has more destr)
-          if (a.destrCount !== b.destrCount) return a.destrCount - b.destrCount;
         }
-        // 2) Class balance for this class
+        // For everyone (incl. after destr placed): class balance, then total size
+        // Do NOT keep sorting by destrCount for normal numbers — that starves
+        // teams that already received an extra destructor.
         const ca = a.classCounts[num.classKey] || 0;
         const cb = b.classCounts[num.classKey] || 0;
         if (ca !== cb) return ca - cb;
-        // 3) Total size
         if (a.slots.length !== b.slots.length) return a.slots.length - b.slots.length;
         return Math.random() - 0.5;
       });
