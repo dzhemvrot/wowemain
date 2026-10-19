@@ -27,6 +27,14 @@
     .kid-row.other-team { opacity: 0.85; }
     .kid-row .meta { font-size: 0.8rem; color: #6c757d; }
     .sync-badge { font-size: 0.75rem; }
+    .class-header {
+      position: sticky;
+      top: 0;
+      background: #e9ecef;
+      padding: 0.35rem 0.6rem;
+      border-radius: 0.3rem;
+      z-index: 1;
+    }
   </style>
 </head>
 <body>
@@ -74,12 +82,17 @@
             <span class="badge bg-success" id="count-in-team">0 komandā</span>
             <span class="text-muted small ms-1" id="count-total"></span>
           </div>
-          <input type="search" class="form-control form-control-sm" style="max-width:220px" id="kid-search" placeholder="Meklēt…">
+          <div class="d-flex flex-wrap gap-2">
+            <select class="form-select form-select-sm" style="max-width:130px" id="class-filter">
+              <option value="">Visas klases</option>
+            </select>
+            <input type="search" class="form-control form-control-sm" style="max-width:200px" id="kid-search" placeholder="Meklēt…">
+          </div>
         </div>
         <div id="kid-list"></div>
         <p class="small text-muted mt-2 mb-0">
           Atzīmē bērnus, kas ir tavā komandā. Zaļš = jau tavā komandā.
-          Ja bērns ir citā komandā, tas būs norādīts — atzīmējot, viņš pāries pie tevis.
+          Saraksts grupēts pa klasēm. Ja bērns ir citā komandā, tas būs norādīts — atzīmējot, viņš pāries pie tevis.
         </p>
       </div>
     </div>

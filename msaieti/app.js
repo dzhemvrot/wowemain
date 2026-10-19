@@ -330,10 +330,32 @@
     }
   }
 
+  function firstName(full) {
+    const s = String(full || "").trim();
+    if (!s) return "?";
+    const parts = s.split(/\s+/).filter(Boolean);
+    // Lists are usually "Surname Name" → use given name (last token)
+    if (parts.length >= 2) return parts[parts.length - 1];
+    return parts[0];
+  }
+
   function teamLabel(team) {
     if (!team) return "—";
     const n = team.number != null ? team.number : "?";
-    return team.name ? `${n}. ${team.name}` : `Komanda ${n}`;
+    if (team.name && String(team.name).trim()) {
+      return `${n}. ${String(team.name).trim()}`;
+    }
+    const captains = (team.captainIds || [])
+      .map((id) => peopleCache.find((p) => p.id === id))
+      .filter(Boolean)
+      .map((c) => firstName(c.name));
+    if (captains.length >= 2) {
+      return `Komanda ${captains[0]} un ${captains[1]}`;
+    }
+    if (captains.length === 1) {
+      return `Komanda ${captains[0]}`;
+    }
+    return `Komanda ${n}`;
   }
 
   function classLabel(person) {

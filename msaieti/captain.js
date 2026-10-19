@@ -103,15 +103,40 @@
     );
   }
 
+  function firstName(full) {
+    const s = String(full || "").trim();
+    if (!s) return "?";
+    const parts = s.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return parts[parts.length - 1];
+    return parts[0];
+  }
+
   function teamLabel(t) {
     if (!t) return "—";
     const n = t.number != null ? t.number : "?";
-    return t.name ? `${n}. ${t.name}` : `Komanda ${n}`;
+    if (t.name && String(t.name).trim()) {
+      return `${n}. ${String(t.name).trim()}`;
+    }
+    const captains = (t.captainIds || [])
+      .map((id) => peopleCache.find((p) => p.id === id))
+      .filter(Boolean)
+      .map((c) => firstName(c.name));
+    if (captains.length >= 2) {
+      return `Komanda ${captains[0]} un ${captains[1]}`;
+    }
+    if (captains.length === 1) {
+      return `Komanda ${captains[0]}`;
+    }
+    return `Komanda ${n}`;
   }
 
   function classLabel(p) {
     if (!p || p.type === "captain") return "—";
     return `${p.grade != null ? p.grade : "?"}.${p.letter || "a"}`;
+  }
+
+  function classKey(p) {
+    return classLabel(p);
   }
 
   function escapeHtml(s) {
@@ -161,16 +186,21 @@
     if (panel) panel.classList.remove("d-none");
 
     const q = ($("#kid-search") && $("#kid-search").value.trim().toLowerCase()) || "";
+    const classFilter =
+      ($("#class-filter") && $("#class-filter").value) || "";
     let kids = participants();
     if (q) {
       kids = kids.filter((p) => (p.name || "").toLowerCase().includes(q));
     }
+    if (classFilter) {
+      kids = kids.filter((p) => classKey(p) === classFilter);
+    }
     kids.sort((a, b) => {
+      const ca = classLabel(a).localeCompare(classLabel(b), "lv");
+      if (ca !== 0) return ca;
       const inA = a.teamId === selectedTeamId ? 0 : 1;
       const inB = b.teamId === selectedTeamId ? 0 : 1;
       if (inA !== inB) return inA - inB;
-      const ca = classLabel(a).localeCompare(classLabel(b), "lv");
-      if (ca !== 0) return ca;
       return (a.name || "").localeCompare(b.name || "", "lv");
     });
 
@@ -193,32 +223,60 @@
         : "Kapitāni nav norādīti";
     }
 
+    // Fill class filter options once we have data
+    const cf = $("#class-filter");
+    if (cf && cf.options.length <= 1) {
+      const classes = [
+        ...new Set(participants().map((p) => classKey(p))),
+      ].sort((a, b) => a.localeCompare(b, "lv"));
+      for (const ck of classes) {
+        const opt = document.createElement("option");
+        opt.value = ck;
+        opt.textContent = ck;
+        cf.appendChild(opt);
+      }
+    }
+
     if (!list) return;
-    list.innerHTML = kids
-      .map((p) => {
-        const mine = p.teamId === selectedTeamId;
-        const other =
-          p.teamId && p.teamId !== selectedTeamId
-            ? teamsCache.find((t) => t.id === p.teamId)
-            : null;
-        const cls = mine
-          ? "kid-row in-team"
-          : other
-          ? "kid-row other-team"
-          : "kid-row";
-        return `<label class="${cls}">
+
+    // Group by class with sticky headers
+    let html = "";
+    let lastClass = null;
+    for (const p of kids) {
+      const ck = classKey(p);
+      if (ck !== lastClass) {
+        lastClass = ck;
+        const inClass = kids.filter((x) => classKey(x) === ck).length;
+        const inClassMine = kids.filter(
+          (x) => classKey(x) === ck && x.teamId === selectedTeamId
+        ).length;
+        html += `<div class="class-header mt-2 mb-1"><strong>${escapeHtml(
+          ck
+        )}</strong> <span class="text-muted small">(${inClassMine}/${inClass})</span></div>`;
+      }
+      const mine = p.teamId === selectedTeamId;
+      const other =
+        p.teamId && p.teamId !== selectedTeamId
+          ? teamsCache.find((t) => t.id === p.teamId)
+          : null;
+      const cls = mine
+        ? "kid-row in-team"
+        : other
+        ? "kid-row other-team"
+        : "kid-row";
+      html += `<label class="${cls}">
           <input type="checkbox" class="form-check-input kid-check" data-id="${p.id}" ${
-          mine ? "checked" : ""
-        }>
+        mine ? "checked" : ""
+      }>
           <span class="flex-grow-1">
             <span>${escapeHtml(p.name)}</span>
-            <span class="meta"> · ${escapeHtml(classLabel(p))}${
-          p.isDestructor ? " · ★" : ""
-        }${other ? " · tagad: " + escapeHtml(teamLabel(other)) : ""}</span>
+            <span class="meta">${
+              p.isDestructor ? " · ★" : ""
+            }${other ? " · tagad: " + escapeHtml(teamLabel(other)) : ""}</span>
           </span>
         </label>`;
-      })
-      .join("");
+    }
+    list.innerHTML = html || '<p class="text-muted small">Nav rezultātu.</p>';
   }
 
   function scheduleSave() {
@@ -321,6 +379,8 @@
       });
     $("#kid-search") &&
       $("#kid-search").addEventListener("input", renderKids);
+    $("#class-filter") &&
+      $("#class-filter").addEventListener("change", renderKids);
     $("#btn-retry-closed") &&
       $("#btn-retry-closed").addEventListener("click", load);
     $("#btn-retry-error") &&
