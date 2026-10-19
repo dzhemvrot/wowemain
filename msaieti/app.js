@@ -26,7 +26,7 @@
     toggle_destructor: "Mainīja destruktoru",
     generate_numbers: "Ģenerēja numurus",
     clear_numbers: "Notīrīja numurus",
-    phase_names: "Pārslēdza uz vārdu režīmu",
+    phase_names: "Ieslēdza 2. posmu (vārdi)",
   };
 
   const TYPE_LABELS = {
@@ -1093,14 +1093,31 @@
     renderAll();
   }
 
-  function switchToNamesPhase() {
-    settingsCache.phase = "names";
-    addLog("phase_names", "");
+  function setPhase(phase) {
+    const next = phase === "names" ? "names" : "numbers";
+    if (settingsCache.phase === next) {
+      updatePhaseUI();
+      return;
+    }
+    settingsCache.phase = next;
+    addLog(next === "names" ? "phase_names" : "generate_numbers", "posms: " + next);
     scheduleSave();
+    updatePhaseUI();
     renderDistribute();
-    alert(
-      "Vārdu režīms: tagad piešķiriet dalībniekus komandām sadaļā Dalībnieki (lauka Komanda) vai labojot personu."
-    );
+  }
+
+  function updatePhaseUI() {
+    const isNames = settingsCache.phase === "names";
+    const rNum = $("#phase-numbers");
+    const rNam = $("#phase-names");
+    if (rNum) rNum.checked = !isNames;
+    if (rNam) rNam.checked = isNames;
+    const phaseLabel = $("#phase-label");
+    if (phaseLabel) {
+      phaseLabel.textContent = isNames
+        ? "Pašreiz: 2. posms — kapitānu lapa ir atvērta (captain.html)"
+        : "Pašreiz: 1. posms — numuri (kapitānu lapa slēgta)";
+    }
   }
 
   function renderDistribute() {
@@ -1143,14 +1160,7 @@
 
     const schemeSel = $("#number-scheme");
     if (schemeSel) schemeSel.value = settingsCache.numberScheme || "prefix";
-
-    const phaseLabel = $("#phase-label");
-    if (phaseLabel) {
-      phaseLabel.textContent =
-        settingsCache.phase === "names"
-          ? "Pašreiz: vārdu režīms"
-          : "Pašreiz: numuru posms";
-    }
+    updatePhaseUI();
 
     const board = $("#dist-teams-board");
     const empty = $("#dist-empty");
@@ -1866,9 +1876,11 @@
     if ($("#btn-clear-numbers")) {
       $("#btn-clear-numbers").addEventListener("click", clearNumbers);
     }
-    if ($("#btn-phase-names")) {
-      $("#btn-phase-names").addEventListener("click", switchToNamesPhase);
-    }
+    document.querySelectorAll('input[name="phase-toggle"]').forEach((el) => {
+      el.addEventListener("change", () => {
+        if (el.checked) setPhase(el.value);
+      });
+    });
     if ($("#number-scheme")) {
       $("#number-scheme").addEventListener("change", () => {
         settingsCache.numberScheme =

@@ -253,13 +253,19 @@
 
         <div class="card mb-3">
           <div class="card-body">
-            <h3 class="h6">2. posms — pēc izlozes (vārdi komandās)</h3>
+            <h3 class="h6">2. posms — vārdu piešķiršana komandām</h3>
             <p class="small text-muted mb-2">
-              Kad komandas savāktas uz vietas, numuri vairs nav vajadzīgi.
-              Šeit var ātri piešķirt dalībniekus komandām (pēc kapitānu sarakstiem) un atzīmēt neierašanos.
+              Kad komandas savāktas uz vietas, ieslēdziet <strong>2. posmu</strong>.
+              Kapitāni tad var atvērt lapu <a href="captain.html" target="_blank"><code>captain.html</code></a>,
+              izvēlēties savu komandu un atzīmēt bērnus no kopējā saraksta.
             </p>
-            <button type="button" class="btn btn-outline-primary btn-sm" id="btn-phase-names">Pārslēgt uz vārdu režīmu</button>
-            <span class="small text-muted ms-2" id="phase-label">Pašreiz: numuru posms</span>
+            <div class="btn-group" role="group" aria-label="Posms">
+              <input type="radio" class="btn-check" name="phase-toggle" id="phase-numbers" value="numbers" autocomplete="off">
+              <label class="btn btn-outline-secondary btn-sm" for="phase-numbers">1. posms — numuri</label>
+              <input type="radio" class="btn-check" name="phase-toggle" id="phase-names" value="names" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="phase-names">2. posms — vārdi (kapitāniem atvērts)</label>
+            </div>
+            <div class="form-text mt-2" id="phase-label">Pašreiz: 1. posms (numuri)</div>
           </div>
         </div>
 
