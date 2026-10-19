@@ -483,55 +483,59 @@
   function renderPeople() {
     const tbody = $("#people-tbody");
     const empty = $("#people-empty");
+    const capBody = $("#captains-tbody");
+    const capEmpty = $("#captains-empty");
     const q = ($("#people-search").value || "").trim().toLowerCase();
-    const typeFilter = ($("#people-filter-type") && $("#people-filter-type").value) || "";
-    let list = [...peopleCache];
-    if (typeFilter) {
-      list = list.filter((p) => p.type === typeFilter);
-    }
+    const sortMode = ($("#people-sort") && $("#people-sort").value) || "name";
+
+    let participants = peopleCache.filter((p) => p.type === "participant");
     if (q) {
-      list = list.filter((p) => (p.name || "").toLowerCase().includes(q));
+      participants = participants.filter((p) =>
+        (p.name || "").toLowerCase().includes(q)
+      );
     }
-    // Captains first, then by name
-    list.sort((a, b) => {
-      if (a.type !== b.type) return a.type === "captain" ? -1 : 1;
+    participants.sort((a, b) => {
+      if (sortMode === "class") {
+        const ca = classLabel(a);
+        const cb = classLabel(b);
+        const c = ca.localeCompare(cb, "lv");
+        if (c !== 0) return c;
+      }
       return (a.name || "").localeCompare(b.name || "", "lv");
     });
 
-    const nPart = peopleCache.filter((p) => p.type === "participant").length;
-    const nCap = peopleCache.filter((p) => p.type === "captain").length;
-    $("#people-count").textContent = peopleCache.length;
+    const captains = peopleCache
+      .filter((p) => p.type === "captain")
+      .sort((a, b) => (a.name || "").localeCompare(b.name || "", "lv"));
+
     const pc = $("#participants-count");
     const cc = $("#captains-count");
-    if (pc) pc.textContent = nPart + " dal.";
-    if (cc) cc.textContent = nCap + " kap.";
-
-    if (!list.length) {
-      tbody.innerHTML = "";
-      empty.classList.remove("d-none");
-      return;
+    if (pc) {
+      pc.textContent = String(
+        peopleCache.filter((p) => p.type === "participant").length
+      );
     }
-    empty.classList.add("d-none");
+    if (cc) cc.textContent = String(captains.length);
 
-    tbody.innerHTML = list
-      .map((p) => {
-        const teamId = p.teamId || getPersonTeamId(p.id);
-        const team = teamId ? teamsCache.find((t) => t.id === teamId) : null;
-        const typeCls =
-          p.type === "captain" ? "person-type-captain" : "person-type-participant";
-        const isPart = p.type === "participant";
-        const rowCls = p.isDestructor ? "destructor-row" : "";
-        return `<tr class="${rowCls}">
+    // Participants table
+    if (!tbody) return;
+    if (!participants.length) {
+      tbody.innerHTML = "";
+      if (empty) empty.classList.remove("d-none");
+    } else {
+      if (empty) empty.classList.add("d-none");
+      tbody.innerHTML = participants
+        .map((p) => {
+          const teamId = p.teamId || getPersonTeamId(p.id);
+          const team = teamId ? teamsCache.find((t) => t.id === teamId) : null;
+          const rowCls = p.isDestructor ? "destructor-row" : "";
+          return `<tr class="${rowCls}">
+          <td><input type="checkbox" class="form-check-input person-select" data-id="${p.id}"></td>
           <td>${escapeHtml(p.name)}</td>
           <td>${escapeHtml(classLabel(p))}</td>
-          <td><span class="status-pill ${typeCls}">${TYPE_LABELS[p.type] || p.type}</span></td>
-          <td>${
-            isPart
-              ? `<input type="checkbox" class="form-check-input btn-toggle-destructor" data-id="${p.id}" ${
-                  p.isDestructor ? "checked" : ""
-                } title="Destruktors">`
-              : "—"
-          }</td>
+          <td><input type="checkbox" class="form-check-input btn-toggle-destructor" data-id="${p.id}" ${
+            p.isDestructor ? "checked" : ""
+          } title="Destruktors"></td>
           <td>${
             p.number
               ? `<span class="num-chip ${p.isDestructor ? "destructor" : ""}">${escapeHtml(
@@ -545,8 +549,71 @@
             <button type="button" class="btn btn-outline-danger btn-sm btn-remove-person" data-id="${p.id}">Dzēst</button>
           </td>
         </tr>`;
-      })
-      .join("");
+        })
+        .join("");
+    }
+
+    // Captains table
+    if (capBody) {
+      if (!captains.length) {
+        capBody.innerHTML = "";
+        if (capEmpty) capEmpty.classList.remove("d-none");
+      } else {
+        if (capEmpty) capEmpty.classList.add("d-none");
+        capBody.innerHTML = captains
+          .map((p) => {
+            const teamId = p.teamId || getPersonTeamId(p.id);
+            const team = teamId ? teamsCache.find((t) => t.id === teamId) : null;
+            return `<tr>
+            <td>${escapeHtml(p.name)}</td>
+            <td>${team ? escapeHtml(teamLabel(team)) : "—"}</td>
+            <td class="table-actions">
+              <button type="button" class="btn btn-outline-secondary btn-sm btn-edit-person" data-id="${p.id}">Labot</button>
+              <button type="button" class="btn btn-outline-danger btn-sm btn-remove-person" data-id="${p.id}">Dzēst</button>
+            </td>
+          </tr>`;
+          })
+          .join("");
+      }
+    }
+
+    const selAll = $("#people-select-all");
+    if (selAll) selAll.checked = false;
+    updateDeleteSelectedBtn();
+  }
+
+  function updateDeleteSelectedBtn() {
+    const btn = $("#btn-delete-selected");
+    if (!btn) return;
+    const n = document.querySelectorAll(".person-select:checked").length;
+    btn.disabled = n === 0;
+    btn.textContent = n ? `Dzēst atzīmētos (${n})` : "Dzēst atzīmētos";
+  }
+
+  function deleteSelectedPeople() {
+    const ids = [...document.querySelectorAll(".person-select:checked")].map(
+      (el) => el.dataset.id
+    );
+    if (!ids.length) return;
+    if (!confirm(`Dzēst ${ids.length} dalībniekus?`)) return;
+    const names = [];
+    for (const id of ids) {
+      const p = peopleCache.find((x) => x.id === id);
+      if (p) names.push(p.name);
+      peopleCache = peopleCache.filter((x) => x.id !== id);
+      for (const t of teamsCache) {
+        t.captainIds = (t.captainIds || []).filter((cid) => cid !== id);
+        t.participantIds = (t.participantIds || []).filter((cid) => cid !== id);
+        if (t.numberSlots) {
+          for (const s of t.numberSlots) {
+            if (s.personId === id) s.personId = null;
+          }
+        }
+      }
+    }
+    addLog("remove_person", `masveida: ${names.slice(0, 5).join(", ")}${names.length > 5 ? "…" : ""} (${ids.length})`);
+    scheduleSave();
+    renderAll();
   }
 
   function renderUsers() {
@@ -917,9 +984,10 @@
       void normal;
     }
 
-    // --- Distribute numbers to teams with balance ---
-    const y = teams.length;
-    // Initialize per-team bags
+    // --- Distribute numbers to teams ---
+    // Priority 1: equal destructors across teams
+    // Priority 2: balanced classes
+    // Priority 3: similar total size
     const teamBags = teams.map((t) => ({
       team: t,
       slots: [],
@@ -927,27 +995,41 @@
       destrCount: 0,
     }));
 
-    // Round-robin by class: for each class, deal numbers across teams
-    const classKeys = Object.keys(byClass).sort();
-    for (const ck of classKeys) {
-      const nums = shuffle(allNumbers.filter((n) => n.classKey === ck));
-      // Sort teams by current count of this class (ascending) each pick — greedy
-      for (const num of nums) {
-        teamBags.sort((a, b) => {
-          const ca = a.classCounts[ck] || 0;
-          const cb = b.classCounts[ck] || 0;
-          if (ca !== cb) return ca - cb;
-          // secondary: total size
-          if (a.slots.length !== b.slots.length) return a.slots.length - b.slots.length;
-          // tertiary: destructor balance if this is destructor
-          if (num.isDestructor) return a.destrCount - b.destrCount;
-          return Math.random() - 0.5;
-        });
-        const bag = teamBags[0];
-        bag.slots.push(num);
-        bag.classCounts[ck] = (bag.classCounts[ck] || 0) + 1;
-        if (num.isDestructor) bag.destrCount++;
-      }
+    function pickBagFor(num) {
+      teamBags.sort((a, b) => {
+        // 1) Destructors first
+        if (num.isDestructor) {
+          if (a.destrCount !== b.destrCount) return a.destrCount - b.destrCount;
+        } else {
+          // Prefer teams that already need more non-destr to keep totals even,
+          // but still respect destructor balance (don't overload a team that has more destr)
+          if (a.destrCount !== b.destrCount) return a.destrCount - b.destrCount;
+        }
+        // 2) Class balance for this class
+        const ca = a.classCounts[num.classKey] || 0;
+        const cb = b.classCounts[num.classKey] || 0;
+        if (ca !== cb) return ca - cb;
+        // 3) Total size
+        if (a.slots.length !== b.slots.length) return a.slots.length - b.slots.length;
+        return Math.random() - 0.5;
+      });
+      return teamBags[0];
+    }
+
+    // First place all destructor numbers (even spread)
+    const destrNums = shuffle(allNumbers.filter((n) => n.isDestructor));
+    const normalNums = shuffle(allNumbers.filter((n) => !n.isDestructor));
+    for (const num of destrNums) {
+      const bag = pickBagFor(num);
+      bag.slots.push(num);
+      bag.classCounts[num.classKey] = (bag.classCounts[num.classKey] || 0) + 1;
+      bag.destrCount++;
+    }
+    // Then place the rest
+    for (const num of normalNums) {
+      const bag = pickBagFor(num);
+      bag.slots.push(num);
+      bag.classCounts[num.classKey] = (bag.classCounts[num.classKey] || 0) + 1;
     }
 
     // Write back to teams + link destructor people to teams
@@ -969,6 +1051,27 @@
       "generate_numbers",
       `x=${parts.length}, n=${parts.filter((p) => p.isDestructor).length}, y=${y}, scheme=${scheme}`
     );
+    scheduleSave();
+    renderAll();
+  }
+
+  function moveNumberToTeam(code, fromTeamId, toTeamId) {
+    if (!code || !fromTeamId || !toTeamId || fromTeamId === toTeamId) return;
+    const from = teamsCache.find((t) => t.id === fromTeamId);
+    const to = teamsCache.find((t) => t.id === toTeamId);
+    if (!from || !to) return;
+    const slots = from.numberSlots || [];
+    const idx = slots.findIndex((s) => s.code === code);
+    if (idx < 0) return;
+    const [slot] = slots.splice(idx, 1);
+    from.numberSlots = slots;
+    if (!to.numberSlots) to.numberSlots = [];
+    to.numberSlots.push(slot);
+    if (slot.personId) {
+      const p = peopleCache.find((x) => x.id === slot.personId);
+      if (p) p.teamId = to.id;
+    }
+    addLog("edit_team", `numurs ${code}: ${teamLabel(from)} → ${teamLabel(to)}`);
     scheduleSave();
     renderAll();
   }
@@ -1075,11 +1178,18 @@
         if (settingsCache.phase === "numbers" || slots.length) {
           body += `<div class="mb-2"><span class="small text-muted">Numuri (${slots.length})${
             destrSlots ? `, destr. ${destrSlots}` : ""
-          }</span><div>`;
+          }</span><div class="d-flex flex-wrap align-items-center">`;
           if (slots.length) {
             const ordered = [...slots].sort((a, b) =>
               String(a.code).localeCompare(String(b.code), "lv")
             );
+            const teamOpts = sorted
+              .filter((tt) => tt.id !== t.id)
+              .map(
+                (tt) =>
+                  `<option value="${tt.id}">→ ${escapeHtml(teamLabel(tt))}</option>`
+              )
+              .join("");
             body += ordered
               .map((s) => {
                 const person = s.personId
@@ -1094,7 +1204,14 @@
                   s.isDestructor ? "destructor" : ""
                 }" title="${title}">${escapeHtml(s.code)}${
                   person ? " ★" : ""
-                }</span>`;
+                }
+                  <select class="form-select form-select-sm d-inline-block num-move-select" data-code="${escapeHtml(
+                    s.code
+                  )}" data-from="${t.id}" style="width:auto;max-width:7rem;font-size:0.7rem;padding:0 0.25rem;height:1.4rem;margin-left:0.2rem">
+                    <option value="">↕</option>
+                    ${teamOpts}
+                  </select>
+                </span>`;
               })
               .join("");
           } else {
@@ -1637,14 +1754,42 @@
       btn.addEventListener("click", () => switchTab(btn.getAttribute("data-tab")));
     });
 
-    $("#btn-add-person").addEventListener("click", () => openPersonModal(null));
+    $("#btn-add-person").addEventListener("click", () => {
+      openPersonModal(null);
+      const typeSel = $("#person-type");
+      if (typeSel) {
+        typeSel.value = "participant";
+        updatePersonFormByType();
+      }
+    });
+    if ($("#btn-add-captain")) {
+      $("#btn-add-captain").addEventListener("click", () => {
+        openPersonModal(null);
+        const typeSel = $("#person-type");
+        if (typeSel) {
+          typeSel.value = "captain";
+          updatePersonFormByType();
+        }
+      });
+    }
     $("#btn-person-save").addEventListener("click", savePerson);
     $("#people-search").addEventListener("input", renderPeople);
-    if ($("#people-filter-type")) {
-      $("#people-filter-type").addEventListener("change", renderPeople);
+    if ($("#people-sort")) {
+      $("#people-sort").addEventListener("change", renderPeople);
     }
     if ($("#person-type")) {
       $("#person-type").addEventListener("change", updatePersonFormByType);
+    }
+    if ($("#btn-delete-selected")) {
+      $("#btn-delete-selected").addEventListener("click", deleteSelectedPeople);
+    }
+    if ($("#people-select-all")) {
+      $("#people-select-all").addEventListener("change", (e) => {
+        document.querySelectorAll(".person-select").forEach((cb) => {
+          cb.checked = e.target.checked;
+        });
+        updateDeleteSelectedBtn();
+      });
     }
     if ($("#btn-import-people")) {
       $("#btn-import-people").addEventListener("click", () => {
@@ -1728,7 +1873,8 @@
 
     document.addEventListener("change", (e) => {
       const t = e.target;
-      if (t && t.classList && t.classList.contains("btn-toggle-destructor")) {
+      if (!t || !t.classList) return;
+      if (t.classList.contains("btn-toggle-destructor")) {
         const id = t.dataset.id;
         const p = peopleCache.find((x) => x.id === id);
         if (!p || p.type !== "participant") return;
@@ -1737,6 +1883,13 @@
         scheduleSave();
         renderPeople();
         renderDistribute();
+      } else if (t.classList.contains("person-select")) {
+        updateDeleteSelectedBtn();
+      } else if (t.classList.contains("num-move-select")) {
+        const code = t.dataset.code;
+        const from = t.dataset.from;
+        const to = t.value;
+        if (to) moveNumberToTeam(code, from, to);
       }
     });
   }

@@ -138,32 +138,33 @@
 
       <!-- PEOPLE TAB -->
       <div id="tab-people" class="tab-panel d-none">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <!-- Participants -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
           <h2 class="section-title mb-0">
-            Dalībnieki un kapitāni
-            <span class="badge bg-secondary badge-count" id="people-count">0</span>
-            <span class="badge person-type-participant badge-count ms-1" id="participants-count">0 dal.</span>
-            <span class="badge person-type-captain badge-count" id="captains-count">0 kap.</span>
+            Dalībnieki
+            <span class="badge person-type-participant badge-count" id="participants-count">0</span>
           </h2>
-          <button type="button" class="btn btn-primary btn-sm" id="btn-add-person">+ Pievienot</button>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btn-import-people">Importēt failu</button>
+            <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.txt" class="d-none">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-add-person">+ Dalībnieks</button>
+          </div>
         </div>
-        <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
-          <input type="search" class="form-control form-control-sm" style="max-width:280px" id="people-search" placeholder="Meklēt pēc vārda…">
-          <select class="form-select form-select-sm" style="max-width:160px" id="people-filter-type">
-            <option value="">Visi</option>
-            <option value="participant">Tikai dalībnieki</option>
-            <option value="captain">Tikai kapitāni</option>
+        <div class="mb-2 d-flex flex-wrap gap-2 align-items-center">
+          <input type="search" class="form-control form-control-sm" style="max-width:240px" id="people-search" placeholder="Meklēt pēc vārda…">
+          <select class="form-select form-select-sm" style="max-width:150px" id="people-sort">
+            <option value="name">Kārtot: vārds</option>
+            <option value="class">Kārtot: klase</option>
           </select>
-          <button type="button" class="btn btn-outline-primary btn-sm" id="btn-import-people">Importēt failu</button>
-          <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.txt" class="d-none">
+          <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-selected" disabled>Dzēst atzīmētos</button>
         </div>
-        <div class="table-responsive">
+        <div class="table-responsive mb-4">
           <table class="table table-sm table-hover align-middle">
             <thead>
               <tr>
+                <th style="width:2rem"><input type="checkbox" class="form-check-input" id="people-select-all" title="Atlasīt visus"></th>
                 <th>Vārds</th>
                 <th>Klase</th>
-                <th>Tips</th>
                 <th title="Destruktors">Destr.</th>
                 <th>Nr.</th>
                 <th>Komanda</th>
@@ -173,7 +174,29 @@
             <tbody id="people-tbody"></tbody>
           </table>
         </div>
-        <div id="people-empty" class="text-muted text-center py-4 d-none">Vēl nav neviena dalībnieka.</div>
+        <div id="people-empty" class="text-muted text-center py-2 d-none">Vēl nav neviena dalībnieka.</div>
+
+        <!-- Captains separate -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 mt-2">
+          <h2 class="section-title mb-0">
+            Kapitāni
+            <span class="badge person-type-captain badge-count" id="captains-count">0</span>
+          </h2>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-add-captain">+ Kapitāns</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Vārds</th>
+                <th>Komanda</th>
+                <th class="table-actions"></th>
+              </tr>
+            </thead>
+            <tbody id="captains-tbody"></tbody>
+          </table>
+        </div>
+        <div id="captains-empty" class="text-muted text-center py-2 d-none">Vēl nav neviena kapitāna.</div>
       </div>
 
       <!-- DISTRIBUTE TAB -->
