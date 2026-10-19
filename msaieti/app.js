@@ -1033,6 +1033,7 @@
     for (const bag of teamBags) {
       bag.team.numberSlots = bag.slots.map((s) => ({
         code: s.code,
+        classKey: s.classKey,
         isDestructor: s.isDestructor,
         personId: s.personId,
       }));
@@ -1046,9 +1047,11 @@
 
     addLog(
       "generate_numbers",
-      `x=${parts.length}, n=${parts.filter((p) => p.isDestructor).length}, y=${y}, scheme=${scheme}`
+      `x=${parts.length}, n=${parts.filter((p) => p.isDestructor).length}, y=${teams.length}, scheme=${scheme}`
     );
     scheduleSave();
+    // Stay on / refresh distribution board so numbers are visible immediately
+    switchTab("tab-distribute");
     renderAll();
   }
 
@@ -1058,7 +1061,7 @@
     const to = teamsCache.find((t) => t.id === toTeamId);
     if (!from || !to) return;
     const slots = from.numberSlots || [];
-    const idx = slots.findIndex((s) => s.code === code);
+    const idx = slots.findIndex((s) => String(s.code) === String(code));
     if (idx < 0) return;
     const [slot] = slots.splice(idx, 1);
     from.numberSlots = slots;
@@ -1070,7 +1073,8 @@
     }
     addLog("edit_team", `numurs ${code}: ${teamLabel(from)} → ${teamLabel(to)}`);
     scheduleSave();
-    renderAll();
+    renderDistribute();
+    renderPeople();
   }
 
   function clearNumbers() {
@@ -1160,9 +1164,11 @@
     if (empty) empty.classList.add("d-none");
 
     const sorted = [...teamsCache].sort((a, b) => (a.number || 0) - (b.number || 0));
+    const isNames = settingsCache.phase === "names";
+
     board.innerHTML = sorted
       .map((t) => {
-        const slots = t.numberSlots || [];
+        const slots = Array.isArray(t.numberSlots) ? t.numberSlots : [];
         const captains = (t.captainIds || [])
           .map((id) => peopleCache.find((p) => p.id === id))
           .filter(Boolean);
@@ -1171,74 +1177,104 @@
         );
         const destrSlots = slots.filter((s) => s.isDestructor).length;
 
+        // Per-class counts from number slots (works in numbers phase)
+        const classCounts = {};
+        for (const s of slots) {
+          const ck = classKeyFromSlot(s);
+          if (ck) classCounts[ck] = (classCounts[ck] || 0) + 1;
+        }
+        const classSummary = Object.keys(classCounts)
+          .sort()
+          .map((k) => `${k}: ${classCounts[k]}`)
+          .join(" · ");
+
         let body = "";
-        if (settingsCache.phase === "numbers" || slots.length) {
-          body += `<div class="mb-2"><span class="small text-muted">Numuri (${slots.length})${
-            destrSlots ? `, destr. ${destrSlots}` : ""
-          }</span><div class="d-flex flex-wrap align-items-center">`;
-          if (slots.length) {
-            const ordered = [...slots].sort((a, b) =>
-              String(a.code).localeCompare(String(b.code), "lv")
-            );
-            const teamOpts = sorted
-              .filter((tt) => tt.id !== t.id)
-              .map(
-                (tt) =>
-                  `<option value="${tt.id}">→ ${escapeHtml(teamLabel(tt))}</option>`
-              )
-              .join("");
-            body += ordered
-              .map((s) => {
-                const person = s.personId
-                  ? peopleCache.find((p) => p.id === s.personId)
-                  : null;
-                const title = person
-                  ? escapeHtml(person.name)
-                  : s.isDestructor
-                  ? "destruktors"
-                  : "";
-                return `<span class="num-chip ${
-                  s.isDestructor ? "destructor" : ""
-                }" title="${title}">${escapeHtml(s.code)}${
-                  person ? " ★" : ""
-                }
-                  <select class="form-select form-select-sm d-inline-block num-move-select" data-code="${escapeHtml(
-                    s.code
-                  )}" data-from="${t.id}" style="width:auto;max-width:7rem;font-size:0.7rem;padding:0 0.25rem;height:1.4rem;margin-left:0.2rem">
-                    <option value="">↕</option>
-                    ${teamOpts}
-                  </select>
-                </span>`;
-              })
-              .join("");
-          } else {
-            body += `<span class="text-muted small">nav numuru</span>`;
-          }
-          body += `</div></div>`;
+
+        // Always show class breakdown when there are slots
+        if (slots.length) {
+          body += `<p class="small mb-1"><strong>Pa klasēm:</strong> ${
+            classSummary || "—"
+          }</p>`;
+          body += `<p class="small text-muted mb-1">Kopā: ${slots.length}${
+            destrSlots ? ` · destruktors: ${destrSlots}` : ""
+          }</p>`;
         }
 
-        if (settingsCache.phase === "names" || members.length) {
-          body += `<div class="small"><span class="text-muted">Dalībnieki (${members.length})</span><ul class="mb-0 ps-3">`;
-          body += members
+        // Numbers — always visible when slots exist (both phases)
+        body += `<div class="mb-2"><span class="small text-muted">Numuri</span>`;
+        if (slots.length) {
+          const ordered = [...slots].sort((a, b) =>
+            String(a.code).localeCompare(String(b.code), "lv")
+          );
+          const teamOpts = sorted
+            .filter((tt) => tt.id !== t.id)
             .map(
-              (p) =>
-                `<li>${escapeHtml(p.name)} <span class="text-muted">(${classLabel(
-                  p
-                )})</span>${
-                  p.isDestructor
-                    ? ' <span class="text-danger">★</span>'
-                    : ""
-                }${p.number ? ` <code>${escapeHtml(p.number)}</code>` : ""}</li>`
+              (tt) =>
+                `<option value="${tt.id}">→ ${escapeHtml(teamLabel(tt))}</option>`
             )
             .join("");
-          body += `</ul></div>`;
+          body += `<div class="d-flex flex-wrap align-items-center gap-1 mt-1">`;
+          body += ordered
+            .map((s) => {
+              const person = s.personId
+                ? peopleCache.find((p) => p.id === s.personId)
+                : null;
+              const title = person
+                ? escapeHtml(person.name)
+                : s.isDestructor
+                ? "destruktors"
+                : "";
+              return `<span class="num-chip ${
+                s.isDestructor ? "destructor" : ""
+              }" title="${title}"><span>${escapeHtml(s.code)}${
+                person ? " ★" : ""
+              }</span>
+                <select class="form-select form-select-sm num-move-select" data-code="${escapeHtml(
+                  String(s.code)
+                )}" data-from="${t.id}" aria-label="Pārvietot numuru" style="width:auto;max-width:6.5rem;font-size:0.7rem;padding:0 0.2rem;height:1.35rem;display:inline-block;margin-left:0.15rem">
+                  <option value="">↕</option>
+                  ${teamOpts}
+                </select>
+              </span>`;
+            })
+            .join("");
+          body += `</div>`;
+        } else {
+          body += `<div class="small text-muted">nav numuru — palaidiet ģenerēšanu</div>`;
+        }
+        body += `</div>`;
+
+        // Names list only in names phase
+        if (isNames) {
+          body += `<div class="small border-top pt-2 mt-1"><span class="text-muted">Dalībnieki (${members.length})</span>`;
+          if (members.length) {
+            body += `<ul class="mb-0 ps-3">`;
+            body += members
+              .map(
+                (p) =>
+                  `<li>${escapeHtml(p.name)} <span class="text-muted">(${classLabel(
+                    p
+                  )})</span>${
+                    p.isDestructor
+                      ? ' <span class="text-danger">★</span>'
+                      : ""
+                  }${
+                    p.number ? ` <code>${escapeHtml(p.number)}</code>` : ""
+                  }</li>`
+              )
+              .join("");
+            body += `</ul>`;
+          } else {
+            body += `<div class="text-muted">vēl nav piešķirtu vārdu</div>`;
+          }
+          body += `</div>`;
         }
 
         return `<div class="col-md-6 col-lg-4">
           <div class="card team-card h-100 shadow-sm">
             <div class="card-body">
-              <h3 class="h6">${escapeHtml(teamLabel(t))}</h3>
-              <p class="small text-muted mb-1">Kapitāni: ${
+              <h3 class="h6 mb-1">${escapeHtml(teamLabel(t))}</h3>
+              <p class="small text-muted mb-2">Kapitāni: ${
                 captains.length
                   ? captains.map((c) => escapeHtml(c.name)).join(", ")
                   : "—"
@@ -1249,6 +1285,21 @@
         </div>`;
       })
       .join("");
+  }
+
+  /** Infer class key from a number slot (prefix scheme 2A01 → 2.a; legacy 001 → unknown). */
+  function classKeyFromSlot(slot) {
+    if (!slot) return null;
+    if (slot.personId) {
+      const p = peopleCache.find((x) => x.id === slot.personId);
+      if (p && p.type === "participant") return classKey(p);
+    }
+    if (slot.classKey) return slot.classKey;
+    const code = String(slot.code || "");
+    // prefix: 2A01, 3B12
+    const m = code.match(/^([2-4])([ABC])(\d{2})$/i);
+    if (m) return `${m[1]}.${m[2].toLowerCase()}`;
+    return null;
   }
 
   // ---------- Login / logout ----------
