@@ -2,7 +2,7 @@
   "use strict";
 
   const STORAGE_AUTH = "msaieti-auth-user";
-  const STORAGE_DATA = "msaieti-data-v1";
+  const STORAGE_DATA = "msaieti-data-v2";
   const SAVE_DEBOUNCE_MS = 600;
   const MAX_LOGS = 2000;
   const MIN_PASSWORD_LEN = 6;
@@ -22,6 +22,11 @@
     remove_user: "Dzēsa lietotāju",
     change_password: "Mainīja paroli",
     admin_set_password: "Iestatīja lietotāja paroli",
+    import_people: "Importēja dalībniekus",
+    toggle_destructor: "Mainīja destruktoru",
+    generate_numbers: "Ģenerēja numurus",
+    clear_numbers: "Notīrīja numurus",
+    phase_names: "Pārslēdza uz vārdu režīmu",
   };
 
   const TYPE_LABELS = {
@@ -38,6 +43,8 @@
   let peopleCache = [];
   let teamsCache = [];
   let logsCache = [];
+  /** @type {{ phase: 'numbers'|'names', numberScheme: 'prefix'|'legacy' }} */
+  let settingsCache = { phase: "numbers", numberScheme: "prefix" };
   let saveTimer = null;
   let remoteEnabled = false;
   let syncState = "idle";
@@ -152,7 +159,8 @@
 
   function loadLocal() {
     try {
-      const raw = localStorage.getItem(STORAGE_DATA);
+      let raw = localStorage.getItem(STORAGE_DATA);
+      if (!raw) raw = localStorage.getItem("msaieti-data-v1");
       if (!raw) return {};
       return JSON.parse(raw);
     } catch {
@@ -166,6 +174,7 @@
       people: peopleCache,
       teams: teamsCache,
       logs: logsCache.slice(-MAX_LOGS),
+      settings: settingsCache,
     };
     localStorage.setItem(STORAGE_DATA, JSON.stringify(payload));
   }
@@ -176,6 +185,13 @@
     if (Array.isArray(data.people)) peopleCache = data.people;
     if (Array.isArray(data.teams)) teamsCache = data.teams;
     if (Array.isArray(data.logs)) logsCache = data.logs;
+    if (data.settings && typeof data.settings === "object") {
+      settingsCache = {
+        phase: data.settings.phase === "names" ? "names" : "numbers",
+        numberScheme:
+          data.settings.numberScheme === "legacy" ? "legacy" : "prefix",
+      };
+    }
   }
 
   async function fetchRemote() {
@@ -192,6 +208,7 @@
       people: peopleCache,
       teams: teamsCache,
       logs: logsCache.slice(-MAX_LOGS),
+      settings: settingsCache,
     };
     const res = await fetch(REMOTE_URL, {
       method: "POST",
@@ -306,6 +323,7 @@
   function renderAll() {
     renderTeams();
     renderPeople();
+    renderDistribute();
     if (currentUser && currentUser.isAdmin) {
       renderUsers();
       renderLogs();
@@ -501,10 +519,26 @@
         const team = teamId ? teamsCache.find((t) => t.id === teamId) : null;
         const typeCls =
           p.type === "captain" ? "person-type-captain" : "person-type-participant";
-        return `<tr>
+        const isPart = p.type === "participant";
+        const rowCls = p.isDestructor ? "destructor-row" : "";
+        return `<tr class="${rowCls}">
           <td>${escapeHtml(p.name)}</td>
           <td>${escapeHtml(classLabel(p))}</td>
           <td><span class="status-pill ${typeCls}">${TYPE_LABELS[p.type] || p.type}</span></td>
+          <td>${
+            isPart
+              ? `<input type="checkbox" class="form-check-input btn-toggle-destructor" data-id="${p.id}" ${
+                  p.isDestructor ? "checked" : ""
+                } title="Destruktors">`
+              : "—"
+          }</td>
+          <td>${
+            p.number
+              ? `<span class="num-chip ${p.isDestructor ? "destructor" : ""}">${escapeHtml(
+                  p.number
+                )}</span>`
+              : "—"
+          }</td>
           <td>${team ? escapeHtml(teamLabel(team)) : "—"}</td>
           <td class="table-actions">
             <button type="button" class="btn btn-outline-secondary btn-sm btn-edit-person" data-id="${p.id}">Labot</button>
@@ -599,6 +633,508 @@
       if (u.id === selectedId) opt.selected = true;
       selectEl.appendChild(opt);
     }
+  }
+
+  // ---------- Import ----------
+  function normalizeClassKey(raw) {
+    if (raw == null) return null;
+    let s = String(raw).replace(/\u00a0/g, " ").trim().toLowerCase();
+    s = s.replace(/\s+/g, "").replace(/\.+$/, "");
+    if (!s) return null;
+    // "2" → 2.a ; "3a" / "3.a" / "3. a" → 3.a
+    const m = s.match(/^([2-4])[\.\s]*([abc])?$/i);
+    if (m) {
+      const grade = parseInt(m[1], 10);
+      const letter = (m[2] || "a").toLowerCase();
+      return { grade, letter };
+    }
+    return null;
+  }
+
+  function cleanName(raw) {
+    if (raw == null) return "";
+    return String(raw)
+      .replace(/\u00a0/g, " ")
+      .replace(/,/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /** Parse dual-column class-header layout (like last year's xlsx). */
+  function parseDualColumnSheet(rows) {
+    const out = [];
+    function walk(hCol, nCol) {
+      let cur = null;
+      for (const row of rows) {
+        const h = row[hCol];
+        const n = row[nCol];
+        if (h != null && String(h).trim()) {
+          cur = normalizeClassKey(h);
+        }
+        const name = cleanName(n);
+        if (name && cur) {
+          out.push({ name, grade: cur.grade, letter: cur.letter });
+        }
+      }
+    }
+    walk(0, 1);
+    if (rows[0] && rows[0].length >= 4) walk(2, 3);
+    return out;
+  }
+
+  /** Parse simple table: Class + Name columns (any order). */
+  function parseSimpleTable(rows) {
+    if (!rows.length) return [];
+    const header = rows[0].map((c) =>
+      String(c == null ? "" : c)
+        .toLowerCase()
+        .trim()
+    );
+    let classIdx = header.findIndex((h) =>
+      /klase|class|grade|класс/.test(h)
+    );
+    let nameIdx = header.findIndex((h) =>
+      /vārds|vards|name|имя|fio|uzvārds/.test(h)
+    );
+    let start = 1;
+    if (classIdx < 0 || nameIdx < 0) {
+      // no header — assume name, class or class, name
+      classIdx = -1;
+      nameIdx = -1;
+      start = 0;
+      const sample = rows.slice(0, 5);
+      for (const r of sample) {
+        if (!r) continue;
+        if (normalizeClassKey(r[0]) && cleanName(r[1])) {
+          classIdx = 0;
+          nameIdx = 1;
+          break;
+        }
+        if (normalizeClassKey(r[1]) && cleanName(r[0])) {
+          classIdx = 1;
+          nameIdx = 0;
+          break;
+        }
+      }
+      if (classIdx < 0) return [];
+    }
+    const out = [];
+    for (let i = start; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r) continue;
+      const cls = normalizeClassKey(r[classIdx]);
+      const name = cleanName(r[nameIdx]);
+      if (cls && name) out.push({ name, grade: cls.grade, letter: cls.letter });
+    }
+    return out;
+  }
+
+  function detectAndParseRows(rows) {
+    if (!rows || !rows.length) return [];
+    // Heuristic: dual-column if first cell looks like class and col2 is name, and col3 also class-ish
+    const dual = parseDualColumnSheet(rows);
+    const simple = parseSimpleTable(rows);
+    // Prefer dual if it found more names (typical for school file)
+    if (dual.length >= simple.length && dual.length > 0) return dual;
+    return simple;
+  }
+
+  async function handleImportFile(file) {
+    if (!file) return;
+    const name = (file.name || "").toLowerCase();
+    let rows = [];
+    try {
+      if (name.endsWith(".csv") || name.endsWith(".txt")) {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter((l) => l.trim());
+        const delim = lines[0].includes(";") ? ";" : ",";
+        rows = lines.map((l) => l.split(delim).map((c) => c.trim()));
+      } else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        if (typeof XLSX === "undefined") {
+          alert("XLSX bibliotēka nav ielādēta. Mēģiniet CSV.");
+          return;
+        }
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+      } else {
+        alert("Neatbalstīts fails. Izmantojiet .xlsx vai .csv");
+        return;
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Neizdevās nolasīt failu: " + err.message);
+      return;
+    }
+
+    const parsed = detectAndParseRows(rows);
+    if (!parsed.length) {
+      alert("Failā neatradu nevienu dalībnieku. Pārbaudiet formātu.");
+      return;
+    }
+
+    // Merge: skip exact name+class duplicates
+    const existing = new Set(
+      peopleCache
+        .filter((p) => p.type === "participant")
+        .map((p) => `${(p.name || "").toLowerCase()}|${p.grade}|${p.letter}`)
+    );
+    let added = 0;
+    for (const row of parsed) {
+      const key = `${row.name.toLowerCase()}|${row.grade}|${row.letter}`;
+      if (existing.has(key)) continue;
+      existing.add(key);
+      peopleCache.push({
+        id: uid("p"),
+        name: row.name,
+        type: "participant",
+        grade: row.grade,
+        letter: row.letter,
+        teamId: null,
+        isDestructor: false,
+        number: null,
+      });
+      added++;
+    }
+    addLog("import_people", `+${added} (fails: ${file.name}, atrasti ${parsed.length})`);
+    scheduleSave();
+    renderAll();
+    alert(`Importēts: ${added} jauni dalībnieki (failā atrasti ${parsed.length}).`);
+  }
+
+  // ---------- Numbers / distribution ----------
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function participantsOnly() {
+    return peopleCache.filter((p) => p.type === "participant");
+  }
+
+  function classKey(p) {
+    return `${p.grade}.${p.letter || "a"}`;
+  }
+
+  function formatNumber(scheme, grade, letter, index1) {
+    const L = (letter || "a").toUpperCase();
+    const n = String(index1).padStart(2, "0");
+    if (scheme === "legacy") {
+      // Different starting digit per class key for visual distinction
+      const order = ["2.a", "2.b", "2.c", "3.a", "3.b", "3.c", "4.a", "4.b", "4.c"];
+      const idx = Math.max(0, order.indexOf(`${grade}.${(letter || "a").toLowerCase()}`));
+      return `${idx}${n}`;
+    }
+    return `${grade}${L}${n}`;
+  }
+
+  /**
+   * Full number pipeline:
+   * 1. Build numbers per class matching participant counts
+   * 2. Assign destructor numbers to destructor people (same class)
+   * 3. Distribute all numbers to teams: balance by class + destructors; remainder random
+   * 4. Non-destructor numbers sit on teams as slots; destructor numbers also linked to people
+   */
+  function runNumberDistribution() {
+    const parts = participantsOnly();
+    const teams = [...teamsCache].sort((a, b) => (a.number || 0) - (b.number || 0));
+    if (!parts.length) {
+      alert("Nav dalībnieku.");
+      return;
+    }
+    if (!teams.length) {
+      alert("Vispirms izveidojiet komandas.");
+      return;
+    }
+
+    const scheme =
+      ($("#number-scheme") && $("#number-scheme").value) ||
+      settingsCache.numberScheme ||
+      "prefix";
+    settingsCache.numberScheme = scheme === "legacy" ? "legacy" : "prefix";
+    settingsCache.phase = "numbers";
+
+    // Reset numbers / team assignment for participants only
+    for (const p of parts) {
+      p.number = null;
+      p.teamId = null;
+    }
+    for (const t of teams) {
+      t.numberSlots = [];
+      t.participantIds = [];
+    }
+
+    // Group by class
+    const byClass = {};
+    for (const p of parts) {
+      const k = classKey(p);
+      if (!byClass[k]) byClass[k] = [];
+      byClass[k].push(p);
+    }
+
+    // Generate numbers per class and assign destructor numbers
+    /** @type {{ code: string, classKey: string, isDestructor: boolean, personId: string|null }[]} */
+    const allNumbers = [];
+
+    for (const [ck, list] of Object.entries(byClass)) {
+      const [gStr, letStr] = ck.split(".");
+      const grade = parseInt(gStr, 10);
+      const letter = letStr || "a";
+      const codes = [];
+      for (let i = 1; i <= list.length; i++) {
+        codes.push(formatNumber(scheme, grade, letter, i));
+      }
+      const shuffledCodes = shuffle(codes);
+      const destructors = shuffle(list.filter((p) => p.isDestructor));
+      const normal = shuffle(list.filter((p) => !p.isDestructor));
+
+      // Assign destructor numbers to destructor people
+      for (let i = 0; i < destructors.length; i++) {
+        const code = shuffledCodes[i];
+        destructors[i].number = code;
+        allNumbers.push({
+          code,
+          classKey: ck,
+          isDestructor: true,
+          personId: destructors[i].id,
+        });
+      }
+      // Remaining codes for non-destructors (not yet linked to people)
+      for (let i = destructors.length; i < shuffledCodes.length; i++) {
+        allNumbers.push({
+          code: shuffledCodes[i],
+          classKey: ck,
+          isDestructor: false,
+          personId: null,
+        });
+      }
+      // Keep normal people without numbers until phase 2
+      void normal;
+    }
+
+    // --- Distribute numbers to teams with balance ---
+    const y = teams.length;
+    // Initialize per-team bags
+    const teamBags = teams.map((t) => ({
+      team: t,
+      slots: [],
+      classCounts: {},
+      destrCount: 0,
+    }));
+
+    // Round-robin by class: for each class, deal numbers across teams
+    const classKeys = Object.keys(byClass).sort();
+    for (const ck of classKeys) {
+      const nums = shuffle(allNumbers.filter((n) => n.classKey === ck));
+      // Sort teams by current count of this class (ascending) each pick — greedy
+      for (const num of nums) {
+        teamBags.sort((a, b) => {
+          const ca = a.classCounts[ck] || 0;
+          const cb = b.classCounts[ck] || 0;
+          if (ca !== cb) return ca - cb;
+          // secondary: total size
+          if (a.slots.length !== b.slots.length) return a.slots.length - b.slots.length;
+          // tertiary: destructor balance if this is destructor
+          if (num.isDestructor) return a.destrCount - b.destrCount;
+          return Math.random() - 0.5;
+        });
+        const bag = teamBags[0];
+        bag.slots.push(num);
+        bag.classCounts[ck] = (bag.classCounts[ck] || 0) + 1;
+        if (num.isDestructor) bag.destrCount++;
+      }
+    }
+
+    // Write back to teams + link destructor people to teams
+    for (const bag of teamBags) {
+      bag.team.numberSlots = bag.slots.map((s) => ({
+        code: s.code,
+        isDestructor: s.isDestructor,
+        personId: s.personId,
+      }));
+      for (const s of bag.slots) {
+        if (s.personId) {
+          const p = peopleCache.find((x) => x.id === s.personId);
+          if (p) p.teamId = bag.team.id;
+        }
+      }
+    }
+
+    addLog(
+      "generate_numbers",
+      `x=${parts.length}, n=${parts.filter((p) => p.isDestructor).length}, y=${y}, scheme=${scheme}`
+    );
+    scheduleSave();
+    renderAll();
+  }
+
+  function clearNumbers() {
+    if (!confirm("Notīrīt visus numurus un numuru piesaisti komandām?")) return;
+    for (const p of peopleCache) {
+      if (p.type === "participant") {
+        p.number = null;
+        // keep teamId if in names phase? clearing numbers only
+      }
+    }
+    for (const t of teamsCache) {
+      t.numberSlots = [];
+    }
+    addLog("clear_numbers", "");
+    scheduleSave();
+    renderAll();
+  }
+
+  function switchToNamesPhase() {
+    settingsCache.phase = "names";
+    addLog("phase_names", "");
+    scheduleSave();
+    renderDistribute();
+    alert(
+      "Vārdu režīms: tagad piešķiriet dalībniekus komandām sadaļā Dalībnieki (lauka Komanda) vai labojot personu."
+    );
+  }
+
+  function renderDistribute() {
+    const parts = participantsOnly();
+    const x = parts.length;
+    const n = parts.filter((p) => p.isDestructor).length;
+    const y = teamsCache.length;
+    const elX = $("#dist-x");
+    const elN = $("#dist-n");
+    const elY = $("#dist-y");
+    if (elX) elX.textContent = String(x);
+    if (elN) elN.textContent = String(n);
+    if (elY) elY.textContent = String(y);
+
+    const byClass = {};
+    for (const p of parts) {
+      const k = classKey(p);
+      byClass[k] = (byClass[k] || 0) + 1;
+    }
+    const bc = $("#dist-by-class");
+    if (bc) {
+      bc.textContent = Object.keys(byClass)
+        .sort()
+        .map((k) => `${k}: ${byClass[k]}`)
+        .join(" · ");
+    }
+    const pt = $("#dist-per-team");
+    if (pt) {
+      if (y > 0 && x > 0) {
+        const base = Math.floor(x / y);
+        const rem = x % y;
+        const dBase = Math.floor(n / y);
+        const dRem = n % y;
+        pt.innerHTML = `~${base}${rem ? `–${base + 1}` : ""} bērni/komanda` +
+          (n
+            ? `; destr.: ~${dBase}${dRem ? `–${dBase + 1}` : ""}`
+            : "");
+      } else pt.textContent = "—";
+    }
+
+    const schemeSel = $("#number-scheme");
+    if (schemeSel) schemeSel.value = settingsCache.numberScheme || "prefix";
+
+    const phaseLabel = $("#phase-label");
+    if (phaseLabel) {
+      phaseLabel.textContent =
+        settingsCache.phase === "names"
+          ? "Pašreiz: vārdu režīms"
+          : "Pašreiz: numuru posms";
+    }
+
+    const board = $("#dist-teams-board");
+    const empty = $("#dist-empty");
+    if (!board) return;
+
+    if (!teamsCache.length) {
+      board.innerHTML = "";
+      if (empty) empty.classList.remove("d-none");
+      return;
+    }
+    if (empty) empty.classList.add("d-none");
+
+    const sorted = [...teamsCache].sort((a, b) => (a.number || 0) - (b.number || 0));
+    board.innerHTML = sorted
+      .map((t) => {
+        const slots = t.numberSlots || [];
+        const captains = (t.captainIds || [])
+          .map((id) => peopleCache.find((p) => p.id === id))
+          .filter(Boolean);
+        const members = peopleCache.filter(
+          (p) => p.type === "participant" && p.teamId === t.id
+        );
+        const destrSlots = slots.filter((s) => s.isDestructor).length;
+
+        let body = "";
+        if (settingsCache.phase === "numbers" || slots.length) {
+          body += `<div class="mb-2"><span class="small text-muted">Numuri (${slots.length})${
+            destrSlots ? `, destr. ${destrSlots}` : ""
+          }</span><div>`;
+          if (slots.length) {
+            const ordered = [...slots].sort((a, b) =>
+              String(a.code).localeCompare(String(b.code), "lv")
+            );
+            body += ordered
+              .map((s) => {
+                const person = s.personId
+                  ? peopleCache.find((p) => p.id === s.personId)
+                  : null;
+                const title = person
+                  ? escapeHtml(person.name)
+                  : s.isDestructor
+                  ? "destruktors"
+                  : "";
+                return `<span class="num-chip ${
+                  s.isDestructor ? "destructor" : ""
+                }" title="${title}">${escapeHtml(s.code)}${
+                  person ? " ★" : ""
+                }</span>`;
+              })
+              .join("");
+          } else {
+            body += `<span class="text-muted small">nav numuru</span>`;
+          }
+          body += `</div></div>`;
+        }
+
+        if (settingsCache.phase === "names" || members.length) {
+          body += `<div class="small"><span class="text-muted">Dalībnieki (${members.length})</span><ul class="mb-0 ps-3">`;
+          body += members
+            .map(
+              (p) =>
+                `<li>${escapeHtml(p.name)} <span class="text-muted">(${classLabel(
+                  p
+                )})</span>${
+                  p.isDestructor
+                    ? ' <span class="text-danger">★</span>'
+                    : ""
+                }${p.number ? ` <code>${escapeHtml(p.number)}</code>` : ""}</li>`
+            )
+            .join("");
+          body += `</ul></div>`;
+        }
+
+        return `<div class="col-md-6 col-lg-4">
+          <div class="card team-card h-100 shadow-sm">
+            <div class="card-body">
+              <h3 class="h6">${escapeHtml(teamLabel(t))}</h3>
+              <p class="small text-muted mb-1">Kapitāni: ${
+                captains.length
+                  ? captains.map((c) => escapeHtml(c.name)).join(", ")
+                  : "—"
+              }</p>
+              ${body}
+            </div>
+          </div>
+        </div>`;
+      })
+      .join("");
   }
 
   // ---------- Login / logout ----------
@@ -724,6 +1260,8 @@
       if (type === "captain") {
         p.grade = null;
         p.letter = null;
+        p.isDestructor = false;
+        p.number = null;
       }
       // If changed from captain to participant, remove from captainIds
       if (wasCaptain && type !== "captain") {
@@ -741,6 +1279,8 @@
         grade,
         letter,
         teamId,
+        isDestructor: false,
+        number: null,
       };
       peopleCache.push(p);
       syncPersonToTeams(p);
@@ -1106,6 +1646,43 @@
     if ($("#person-type")) {
       $("#person-type").addEventListener("change", updatePersonFormByType);
     }
+    if ($("#btn-import-people")) {
+      $("#btn-import-people").addEventListener("click", () => {
+        const inp = $("#import-file-input");
+        if (inp) inp.click();
+      });
+    }
+    if ($("#import-file-input")) {
+      $("#import-file-input").addEventListener("change", async (e) => {
+        const f = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if (f) await handleImportFile(f);
+      });
+    }
+    if ($("#btn-run-numbers")) {
+      $("#btn-run-numbers").addEventListener("click", () => {
+        if (
+          !confirm(
+            "Ģenerēt un sadalīt numurus? Esošie numuri tiks pārrakstīti."
+          )
+        )
+          return;
+        runNumberDistribution();
+      });
+    }
+    if ($("#btn-clear-numbers")) {
+      $("#btn-clear-numbers").addEventListener("click", clearNumbers);
+    }
+    if ($("#btn-phase-names")) {
+      $("#btn-phase-names").addEventListener("click", switchToNamesPhase);
+    }
+    if ($("#number-scheme")) {
+      $("#number-scheme").addEventListener("change", () => {
+        settingsCache.numberScheme =
+          $("#number-scheme").value === "legacy" ? "legacy" : "prefix";
+        scheduleSave();
+      });
+    }
 
     $("#btn-add-team").addEventListener("click", () => openTeamModal(null));
     $("#btn-team-save").addEventListener("click", saveTeam);
@@ -1146,6 +1723,20 @@
         $("#ap-new").value = "";
         $("#ap-error").classList.add("d-none");
         bootstrap.Modal.getOrCreateInstance($("#modal-admin-password")).show();
+      }
+    });
+
+    document.addEventListener("change", (e) => {
+      const t = e.target;
+      if (t && t.classList && t.classList.contains("btn-toggle-destructor")) {
+        const id = t.dataset.id;
+        const p = peopleCache.find((x) => x.id === id);
+        if (!p || p.type !== "participant") return;
+        p.isDestructor = !!t.checked;
+        addLog("toggle_destructor", p.name + (p.isDestructor ? " ✓" : " ✗"));
+        scheduleSave();
+        renderPeople();
+        renderDistribute();
       }
     });
   }

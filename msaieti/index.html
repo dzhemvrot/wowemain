@@ -38,6 +38,31 @@
     .log-table td { font-size: 0.9rem; }
     .sync-badge { font-size: 0.75rem; }
     .table-actions { white-space: nowrap; }
+    .num-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 0.35rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.85rem;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      margin: 0.15rem;
+    }
+    .num-chip.destructor {
+      background: #f8d7da;
+      border-color: #f1aeb5;
+      color: #842029;
+      font-weight: 700;
+    }
+    .destructor-row { background: #fff5f5; }
+    .stats-box {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 0.5rem;
+      padding: 0.75rem 1rem;
+    }
   </style>
 </head>
 <body>
@@ -84,6 +109,9 @@
         <li class="nav-item">
           <button class="nav-link" data-tab="tab-people">Dalībnieki</button>
         </li>
+        <li class="nav-item">
+          <button class="nav-link" data-tab="tab-distribute">Sadalījums</button>
+        </li>
         <li class="nav-item admin-only d-none">
           <button class="nav-link" data-tab="tab-users">Lietotāji</button>
         </li>
@@ -119,13 +147,15 @@
           </h2>
           <button type="button" class="btn btn-primary btn-sm" id="btn-add-person">+ Pievienot</button>
         </div>
-        <div class="mb-3 d-flex flex-wrap gap-2">
+        <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
           <input type="search" class="form-control form-control-sm" style="max-width:280px" id="people-search" placeholder="Meklēt pēc vārda…">
           <select class="form-select form-select-sm" style="max-width:160px" id="people-filter-type">
             <option value="">Visi</option>
             <option value="participant">Tikai dalībnieki</option>
             <option value="captain">Tikai kapitāni</option>
           </select>
+          <button type="button" class="btn btn-outline-primary btn-sm" id="btn-import-people">Importēt failu</button>
+          <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.txt" class="d-none">
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle">
@@ -134,6 +164,8 @@
                 <th>Vārds</th>
                 <th>Klase</th>
                 <th>Tips</th>
+                <th title="Destruktors">Destr.</th>
+                <th>Nr.</th>
                 <th>Komanda</th>
                 <th class="table-actions"></th>
               </tr>
@@ -142,6 +174,74 @@
           </table>
         </div>
         <div id="people-empty" class="text-muted text-center py-4 d-none">Vēl nav neviena dalībnieka.</div>
+      </div>
+
+      <!-- DISTRIBUTE TAB -->
+      <div id="tab-distribute" class="tab-panel d-none">
+        <h2 class="section-title">Numuru sadalījums un komandas</h2>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <div class="stats-box">
+              <div class="small text-muted">Dalībnieki (x)</div>
+              <div class="fs-4 fw-semibold" id="dist-x">0</div>
+              <div class="small" id="dist-by-class"></div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="stats-box">
+              <div class="small text-muted">Destruktors (n)</div>
+              <div class="fs-4 fw-semibold text-danger" id="dist-n">0</div>
+              <div class="small text-muted">Atzīmē ar ☑ sadaļā Dalībnieki</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="stats-box">
+              <div class="small text-muted">Komandas (y)</div>
+              <div class="fs-4 fw-semibold" id="dist-y">0</div>
+              <div class="small" id="dist-per-team">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-body">
+            <h3 class="h6">1. posms — numuri</h3>
+            <p class="small text-muted mb-2">
+              Ģenerē numurus pa klasēm, piešķir destruktoru numurus un izklāj numurus pa komandām
+              (līdzsvaroti pa klasēm un destruktoriem). Šajā posmā komandās redzami <strong>numuri</strong>, ne vārdi.
+            </p>
+            <div class="row g-2 align-items-end mb-2">
+              <div class="col-md-4">
+                <label class="form-label small">Numuru shēma</label>
+                <select class="form-select form-select-sm" id="number-scheme">
+                  <option value="prefix">Prefikss klasei (2A01, 3B02…)</option>
+                  <option value="legacy">Kā pagājušajā gadā (klasēm dažādi sākumi)</option>
+                </select>
+              </div>
+              <div class="col-md-8 d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-primary btn-sm" id="btn-run-numbers">Ģenerēt un sadalīt numurus</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-numbers">Notīrīt numurus</button>
+              </div>
+            </div>
+            <div class="form-text text-warning">Pārraksta esošos numurus un to piesaisti komandām. Kapitāni netiek aiztikti.</div>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-body">
+            <h3 class="h6">2. posms — pēc izlozes (vārdi komandās)</h3>
+            <p class="small text-muted mb-2">
+              Kad komandas savāktas uz vietas, numuri vairs nav vajadzīgi.
+              Šeit var ātri piešķirt dalībniekus komandām (pēc kapitānu sarakstiem) un atzīmēt neierašanos.
+            </p>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btn-phase-names">Pārslēgt uz vārdu režīmu</button>
+            <span class="small text-muted ms-2" id="phase-label">Pašreiz: numuru posms</span>
+          </div>
+        </div>
+
+        <div id="dist-teams-board" class="row g-3"></div>
+        <div id="dist-empty" class="text-muted text-center py-3 d-none">Nav komandu vai numuru. Izveidojiet komandas un palaidiet ģenerēšanu.</div>
       </div>
 
       <!-- USERS TAB (admin) -->
@@ -419,6 +519,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
