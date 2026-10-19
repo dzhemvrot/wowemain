@@ -259,11 +259,9 @@
               Kapitāni tad var atvērt lapu <a href="captain.html" target="_blank"><code>captain.html</code></a>,
               izvēlēties savu komandu un atzīmēt bērnus no kopējā saraksta.
             </p>
-            <div class="btn-group" role="group" aria-label="Posms">
-              <input type="radio" class="btn-check" name="phase-toggle" id="phase-numbers" value="numbers" autocomplete="off">
-              <label class="btn btn-outline-secondary btn-sm" for="phase-numbers">1. posms — numuri</label>
-              <input type="radio" class="btn-check" name="phase-toggle" id="phase-names" value="names" autocomplete="off">
-              <label class="btn btn-outline-primary btn-sm" for="phase-names">2. posms — vārdi (kapitāniem atvērts)</label>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-phase-numbers">1. posms — numuri</button>
+              <button type="button" class="btn btn-sm btn-outline-primary" id="btn-phase-names">2. posms — vārdi (kapitāniem atvērts)</button>
             </div>
             <div class="form-text mt-2" id="phase-label">Pašreiz: 1. posms (numuri)</div>
           </div>

@@ -1108,10 +1108,18 @@
 
   function updatePhaseUI() {
     const isNames = settingsCache.phase === "names";
-    const rNum = $("#phase-numbers");
-    const rNam = $("#phase-names");
-    if (rNum) rNum.checked = !isNames;
-    if (rNam) rNam.checked = isNames;
+    const bNum = $("#btn-phase-numbers");
+    const bNam = $("#btn-phase-names");
+    if (bNum) {
+      bNum.classList.toggle("btn-secondary", !isNames);
+      bNum.classList.toggle("btn-outline-secondary", isNames);
+      bNum.classList.toggle("active", !isNames);
+    }
+    if (bNam) {
+      bNam.classList.toggle("btn-primary", isNames);
+      bNam.classList.toggle("btn-outline-primary", !isNames);
+      bNam.classList.toggle("active", isNames);
+    }
     const phaseLabel = $("#phase-label");
     if (phaseLabel) {
       phaseLabel.textContent = isNames
@@ -1876,11 +1884,12 @@
     if ($("#btn-clear-numbers")) {
       $("#btn-clear-numbers").addEventListener("click", clearNumbers);
     }
-    document.querySelectorAll('input[name="phase-toggle"]').forEach((el) => {
-      el.addEventListener("change", () => {
-        if (el.checked) setPhase(el.value);
-      });
-    });
+    if ($("#btn-phase-numbers")) {
+      $("#btn-phase-numbers").addEventListener("click", () => setPhase("numbers"));
+    }
+    if ($("#btn-phase-names")) {
+      $("#btn-phase-names").addEventListener("click", () => setPhase("names"));
+    }
     if ($("#number-scheme")) {
       $("#number-scheme").addEventListener("change", () => {
         settingsCache.numberScheme =
