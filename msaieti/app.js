@@ -1331,6 +1331,158 @@
       .trim();
   }
 
+  /**
+   * Class list from wardrobe/signature sheets, e.g.:
+   * "…, Rīgas 22. vidusskola, 3.a, Klases stunda"
+   * Nr. | Uzvārds, Vārds | Datums | Paraksts
+   * 1 | Balulis Nikita, |
+   * Class also taken from filename: 2.xlsx, 3a.xlsx, 3.b.xlsx
+   */
+  function classFromFilename(filename) {
+    if (!filename) return null;
+    const base = String(filename)
+      .replace(/^.*[\\/]/, "")
+      .replace(/\.(xlsx|xls|csv|txt)$/i, "")
+      .trim();
+    return normalizeClassKey(base);
+  }
+
+  function classFromTitleCell(text) {
+    if (text == null) return null;
+    const s = String(text).replace(/\u00a0/g, " ");
+    // Prefer explicit 3.a / 2.b / 4c patterns
+    const m1 = s.match(/\b([2-4])\s*[\.\s]*([abc])\b/i);
+    if (m1) {
+      return {
+        grade: parseInt(m1[1], 10),
+        letter: m1[2].toLowerCase(),
+      };
+    }
+    // Bare grade in title: "…, 2, Klases" or end "2"
+    const m2 = s.match(/(?:^|[\s,;])([2-4])(?:[\s,;]|$)/);
+    if (m2) {
+      return { grade: parseInt(m2[1], 10), letter: "a" };
+    }
+    return null;
+  }
+
+  function looksLikeRosterHeader(row) {
+    if (!row || !row.length) return false;
+    const joined = row
+      .map((c) => String(c == null ? "" : c).toLowerCase())
+      .join(" ");
+    return (
+      /uzvārds|uzvards|vārds|vards|paraksts|datums/.test(joined) &&
+      (/nr\.?/.test(joined) || /№/.test(joined))
+    );
+  }
+
+  function looksLikePersonName(s) {
+    const n = cleanName(s);
+    if (!n || n.length < 2) return false;
+    if (/^(nr\.?|№|datums|paraksts|uzvārds|uzvards)$/i.test(n)) return false;
+    if (/^\d+$/.test(n)) return false;
+    // At least one letter
+    return /[A-Za-zĀČĒĢĪĶĻŅŠŪŽāčēģīķļņšūžА-Яа-яЁёІіЇїЄє]/.test(n);
+  }
+
+  /**
+   * Parse single-class roster sheets (garderobe / klases saraksts).
+   * @param {any[][]} rows
+   * @param {string} [filename]
+   */
+  function parseClassRosterSheet(rows, filename) {
+    if (!rows || !rows.length) return [];
+    let cls =
+      classFromFilename(filename) ||
+      classFromTitleCell(rows[0] && rows[0][0]) ||
+      classFromTitleCell(
+        rows[0] && rows[0].filter((c) => c != null).join(" ")
+      );
+
+    // Scan first few rows for class in any cell
+    if (!cls) {
+      for (let i = 0; i < Math.min(5, rows.length); i++) {
+        const r = rows[i];
+        if (!r) continue;
+        for (const cell of r) {
+          cls = classFromTitleCell(cell) || normalizeClassKey(cell);
+          if (cls) break;
+        }
+        if (cls) break;
+      }
+    }
+    if (!cls) return [];
+
+    // Find header row with "Uzvārds, Vārds" to know name column
+    let nameCol = 1;
+    let startRow = 0;
+    for (let i = 0; i < Math.min(8, rows.length); i++) {
+      if (looksLikeRosterHeader(rows[i])) {
+        startRow = i + 1;
+        const header = rows[i].map((c) =>
+          String(c == null ? "" : c).toLowerCase()
+        );
+        const ni = header.findIndex((h) =>
+          /uzvārds|uzvards|vārds|vards|name|fio/.test(h)
+        );
+        if (ni >= 0) nameCol = ni;
+        break;
+      }
+    }
+    // If no header found, skip title-like first rows
+    if (startRow === 0) {
+      for (let i = 0; i < Math.min(5, rows.length); i++) {
+        const r = rows[i];
+        if (!r) continue;
+        const a = r[0];
+        const b = r[1];
+        // "1" + name
+        if (
+          a != null &&
+          /^\d+$/.test(String(a).trim()) &&
+          looksLikePersonName(b)
+        ) {
+          startRow = i;
+          nameCol = 1;
+          break;
+        }
+        // name in first column
+        if (looksLikePersonName(a) && !normalizeClassKey(a)) {
+          startRow = i;
+          nameCol = 0;
+          break;
+        }
+      }
+    }
+
+    const out = [];
+    const seen = new Set();
+    for (let i = startRow; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r) continue;
+      // Prefer name column; if empty try adjacent
+      let rawName = r[nameCol];
+      if (!looksLikePersonName(rawName)) {
+        if (looksLikePersonName(r[1])) rawName = r[1];
+        else if (looksLikePersonName(r[0]) && !/^\d+$/.test(String(r[0]).trim()))
+          rawName = r[0];
+        else continue;
+      }
+      // Skip pure row numbers mistaken as names
+      if (/^\d+$/.test(String(rawName).trim())) continue;
+      // Skip title leftovers
+      if (/garderob|vidusskol|klases stunda|paraksts/i.test(String(rawName)))
+        continue;
+
+      const name = cleanName(rawName);
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      out.push({ name, grade: cls.grade, letter: cls.letter });
+    }
+    return out;
+  }
+
   /** Parse dual-column class-header layout (like last year's xlsx). */
   function parseDualColumnSheet(rows) {
     const out = [];
@@ -1343,7 +1495,7 @@
           cur = normalizeClassKey(h);
         }
         const name = cleanName(n);
-        if (name && cur) {
+        if (name && cur && looksLikePersonName(name)) {
           out.push({ name, grade: cur.grade, letter: cur.letter });
         }
       }
@@ -1395,19 +1547,22 @@
       if (!r) continue;
       const cls = normalizeClassKey(r[classIdx]);
       const name = cleanName(r[nameIdx]);
-      if (cls && name) out.push({ name, grade: cls.grade, letter: cls.letter });
+      if (cls && name && looksLikePersonName(name))
+        out.push({ name, grade: cls.grade, letter: cls.letter });
     }
     return out;
   }
 
-  function detectAndParseRows(rows) {
+  function detectAndParseRows(rows, filename) {
     if (!rows || !rows.length) return [];
-    // Heuristic: dual-column if first cell looks like class and col2 is name, and col3 also class-ish
+    const roster = parseClassRosterSheet(rows, filename);
     const dual = parseDualColumnSheet(rows);
     const simple = parseSimpleTable(rows);
-    // Prefer dual if it found more names (typical for school file)
-    if (dual.length >= simple.length && dual.length > 0) return dual;
-    return simple;
+    // Prefer the parser that found the most plausible names
+    const candidates = [roster, dual, simple].sort(
+      (a, b) => b.length - a.length
+    );
+    return candidates[0] || [];
   }
 
   async function handleImportFile(file) {
@@ -1439,9 +1594,11 @@
       return;
     }
 
-    const parsed = detectAndParseRows(rows);
+    const parsed = detectAndParseRows(rows, file.name);
     if (!parsed.length) {
-      alert("Failā neatradu nevienu dalībnieku. Pārbaudiet formātu.");
+      alert(
+        "Failā neatradu nevienu dalībnieku. Atbalstīti formāti: klases saraksts (Nr. / Uzvārds Vārds + klase virsrakstā vai faila nosaukumā), vai tabula ar klasi un vārdu."
+      );
       return;
     }
 
