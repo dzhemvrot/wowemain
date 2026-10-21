@@ -743,6 +743,270 @@
       .replace(/"/g, "&quot;");
   }
 
+  // ---------- CSV export ----------
+  function csvEscape(val) {
+    const s = String(val ?? "");
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function rowsToCsv(rows) {
+    return rows.map((r) => r.map(csvEscape).join(",")).join("\r\n");
+  }
+
+  function downloadCsv(filename, rows) {
+    const csv = rowsToCsv(rows);
+    // BOM for Excel UTF-8
+    const blob = new Blob(["\uFEFF" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function stamp() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    return (
+      d.getFullYear() +
+      p(d.getMonth() + 1) +
+      p(d.getDate()) +
+      "-" +
+      p(d.getHours()) +
+      p(d.getMinutes())
+    );
+  }
+
+  function exportTeamsCsv() {
+    const teams = [...teamsCache].sort(
+      (a, b) => (a.number || 0) - (b.number || 0)
+    );
+    const rows = [
+      [
+        "Komanda",
+        "Nr",
+        "Nosaukums",
+        "Kapitāns 1",
+        "Kapitāns 2",
+        "Mentors",
+        "Dalībnieku skaits",
+      ],
+    ];
+    for (const t of teams) {
+      const caps = (t.captainIds || [])
+        .map((id) => peopleCache.find((p) => p.id === id))
+        .filter(Boolean);
+      const mentor = t.mentorId
+        ? usersCache.find((u) => u.id === t.mentorId)
+        : null;
+      const members = peopleCache.filter(
+        (p) => p.type === "participant" && p.teamId === t.id
+      );
+      rows.push([
+        teamLabel(t),
+        t.number != null ? t.number : "",
+        t.name || "",
+        caps[0] ? caps[0].name : "",
+        caps[1] ? caps[1].name : "",
+        mentor ? mentor.name || mentor.username : "",
+        members.length,
+      ]);
+    }
+    downloadCsv("komandas-" + stamp() + ".csv", rows);
+  }
+
+  function exportTeamsMembersCsv() {
+    const teams = [...teamsCache].sort(
+      (a, b) => (a.number || 0) - (b.number || 0)
+    );
+    const rows = [
+      [
+        "Komanda",
+        "Loma",
+        "Vārds",
+        "Klase",
+        "Destruktors",
+        "Numurs",
+      ],
+    ];
+    for (const t of teams) {
+      const label = teamLabel(t);
+      const caps = (t.captainIds || [])
+        .map((id) => peopleCache.find((p) => p.id === id))
+        .filter(Boolean);
+      for (const c of caps) {
+        rows.push([label, "Kapitāns", c.name || "", "", "", ""]);
+      }
+      const members = peopleCache
+        .filter((p) => p.type === "participant" && p.teamId === t.id)
+        .sort((a, b) => {
+          const ca = classLabel(a).localeCompare(classLabel(b), "lv");
+          if (ca !== 0) return ca;
+          return (a.name || "").localeCompare(b.name || "", "lv");
+        });
+      for (const p of members) {
+        rows.push([
+          label,
+          "Dalībnieks",
+          p.name || "",
+          classLabel(p),
+          p.isDestructor ? "jā" : "",
+          p.number || "",
+        ]);
+      }
+    }
+    downloadCsv("komandu-sastavs-" + stamp() + ".csv", rows);
+  }
+
+  function exportPeopleCsv() {
+    const rows = [
+      ["Tips", "Vārds", "Klase", "Destruktors", "Numurs", "Komanda"],
+    ];
+    const list = [...peopleCache].sort((a, b) => {
+      if (a.type !== b.type) return a.type === "captain" ? -1 : 1;
+      const ca = classLabel(a).localeCompare(classLabel(b), "lv");
+      if (ca !== 0) return ca;
+      return (a.name || "").localeCompare(b.name || "", "lv");
+    });
+    for (const p of list) {
+      const teamId = p.teamId || getPersonTeamId(p.id);
+      const team = teamId ? teamsCache.find((t) => t.id === teamId) : null;
+      rows.push([
+        p.type === "captain" ? "Kapitāns" : "Dalībnieks",
+        p.name || "",
+        p.type === "captain" ? "" : classLabel(p),
+        p.isDestructor ? "jā" : "",
+        p.number || "",
+        team ? teamLabel(team) : "",
+      ]);
+    }
+    downloadCsv("dalibnieki-" + stamp() + ".csv", rows);
+  }
+
+  function exportNumbersCsv() {
+    const teams = [...teamsCache].sort(
+      (a, b) => (a.number || 0) - (b.number || 0)
+    );
+    const rows = [
+      [
+        "Komanda",
+        "Numurs",
+        "Klase",
+        "Destruktors",
+        "Dalībnieks (ja piesaistīts)",
+      ],
+    ];
+    let any = false;
+    for (const t of teams) {
+      const slots = Array.isArray(t.numberSlots) ? [...t.numberSlots] : [];
+      slots.sort((a, b) =>
+        String(a.code || "").localeCompare(String(b.code || ""), "lv")
+      );
+      for (const s of slots) {
+        any = true;
+        const person = s.personId
+          ? peopleCache.find((p) => p.id === s.personId)
+          : null;
+        const ck =
+          s.classKey ||
+          (person ? classKey(person) : null) ||
+          "";
+        rows.push([
+          teamLabel(t),
+          s.code || "",
+          ck,
+          s.isDestructor ? "jā" : "",
+          person ? person.name : "",
+        ]);
+      }
+    }
+    if (!any) {
+      alert("Nav numuru — vispirms palaidiet ģenerēšanu sadaļā Sadalījums.");
+      return;
+    }
+    downloadCsv("numuri-pa-komandam-" + stamp() + ".csv", rows);
+  }
+
+  function exportCarouselScheduleCsv() {
+    readCarouselForm();
+    const sched = buildCarouselSchedule();
+    if (!sched.ok || !sched.rows.length) {
+      alert("Neizdevās aprēķināt grafiku — pārbaudiet laikus un komandas.");
+      return;
+    }
+    const rows = [
+      ["Tips", "Stacija", "Sākums", "Beigas", "Minūtes"],
+      ...sched.rows.map((r) =>
+        r.type === "transition"
+          ? ["Pāreja", "", r.start, r.end, r.minutes]
+          : ["Stacija", r.index, r.start, r.end, r.minutes]
+      ),
+    ];
+    downloadCsv("karuselis-grafiks-" + stamp() + ".csv", rows);
+  }
+
+  function exportCarouselStationsCsv() {
+    captureCarouselStationsFromDom();
+    syncCarouselStations();
+    const rows = [["Stacija", "Kabinetts", "Organizatori"]];
+    carouselCache.stations.forEach((s, i) => {
+      const names = (s.organizerIds || [])
+        .map((id) => {
+          const u = usersCache.find((x) => x.id === id);
+          return u ? u.name || u.username : id;
+        })
+        .filter(Boolean)
+        .join("; ");
+      rows.push([i + 1, s.room || "", names]);
+    });
+    downloadCsv("karuselis-stacijas-" + stamp() + ".csv", rows);
+  }
+
+  function exportCarouselRoutesCsv() {
+    captureCarouselStationsFromDom();
+    const sched = buildCarouselSchedule();
+    const y = teamsCache.length;
+    if (!y || !sched.ok) {
+      alert("Nav komandu vai grafika.");
+      return;
+    }
+    const teams = [...teamsCache].sort(
+      (a, b) => (a.number || 0) - (b.number || 0)
+    );
+    const stationRows = (sched.rows || []).filter((r) => r.type === "station");
+    const header = ["Komanda"];
+    for (let p = 0; p < y; p++) {
+      const sr = stationRows[p];
+      header.push(
+        sr
+          ? `Posms ${p + 1} (${sr.start}-${sr.end})`
+          : `Posms ${p + 1}`
+      );
+    }
+    header.push("Maršruts");
+    const rows = [header];
+    teams.forEach((team, tIdx) => {
+      const route = [];
+      const cells = [teamLabel(team)];
+      for (let p = 0; p < y; p++) {
+        const stIdx = (tIdx + p) % y;
+        const st = carouselCache.stations[stIdx] || {};
+        const room = (st.room || "").trim() || `st.${stIdx + 1}`;
+        cells.push(room);
+        route.push(room);
+      }
+      cells.push(route.join(" → "));
+      rows.push(cells);
+    });
+    downloadCsv("karuselis-marsruti-" + stamp() + ".csv", rows);
+  }
+
   // ---------- Fill selects ----------
   function fillTeamSelect(selectEl, selectedId) {
     selectEl.innerHTML = '<option value="">— Nav piešķirta —</option>';
@@ -2306,6 +2570,19 @@
     if ($("#btn-car-save")) {
       $("#btn-car-save").addEventListener("click", saveCarouselFromForm);
     }
+    const csvBtns = {
+      "btn-export-teams-csv": exportTeamsCsv,
+      "btn-export-teams-members-csv": exportTeamsMembersCsv,
+      "btn-export-people-csv": exportPeopleCsv,
+      "btn-export-numbers-csv": exportNumbersCsv,
+      "btn-export-car-schedule-csv": exportCarouselScheduleCsv,
+      "btn-export-car-stations-csv": exportCarouselStationsCsv,
+      "btn-export-car-routes-csv": exportCarouselRoutesCsv,
+    };
+    Object.keys(csvBtns).forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("click", csvBtns[id]);
+    });
     // Live recalc on time/transition change
     ["car-start", "car-end", "car-transition"].forEach((id) => {
       const el = document.getElementById(id);

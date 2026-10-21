@@ -130,7 +130,8 @@
             Komandas
             <span class="badge bg-secondary badge-count" id="teams-count">0</span>
           </h2>
-          <div class="d-flex gap-2">
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-success btn-sm" id="btn-export-teams-csv">CSV komandas</button>
             <button type="button" class="btn btn-outline-primary btn-sm" id="btn-generate-teams">Ģenerēt N komandas</button>
             <button type="button" class="btn btn-primary btn-sm" id="btn-add-team">+ Komanda</button>
           </div>
@@ -148,6 +149,7 @@
             <span class="badge person-type-participant badge-count" id="participants-count">0</span>
           </h2>
           <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-success btn-sm" id="btn-export-people-csv">CSV dalībnieki</button>
             <button type="button" class="btn btn-outline-primary btn-sm" id="btn-import-people">Importēt failu</button>
             <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv,.txt" class="d-none">
             <button type="button" class="btn btn-primary btn-sm" id="btn-add-person">+ Dalībnieks</button>
@@ -204,7 +206,13 @@
 
       <!-- DISTRIBUTE TAB -->
       <div id="tab-distribute" class="tab-panel d-none">
-        <h2 class="section-title">Numuru sadalījums un komandas</h2>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h2 class="section-title mb-0">Numuru sadalījums un komandas</h2>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-success btn-sm" id="btn-export-numbers-csv">CSV numuri</button>
+            <button type="button" class="btn btn-outline-success btn-sm" id="btn-export-teams-members-csv">CSV komandu sastāvs</button>
+          </div>
+        </div>
 
         <div class="row g-3 mb-3">
           <div class="col-md-4">
@@ -276,7 +284,14 @@
 
       <!-- CAROUSEL TAB -->
       <div id="tab-carousel" class="tab-panel d-none">
-        <h2 class="section-title">Karuselis</h2>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <h2 class="section-title mb-0">Karuselis</h2>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-success btn-sm" id="btn-export-car-schedule-csv">CSV grafiks</button>
+            <button type="button" class="btn btn-outline-success btn-sm" id="btn-export-car-stations-csv">CSV stacijas</button>
+            <button type="button" class="btn btn-outline-success btn-sm" id="btn-export-car-routes-csv">CSV maršruti</button>
+          </div>
+        </div>
         <p class="small text-muted mb-3">
           Staciju skaits = komandu skaits. Ievadiet sākuma/beigu laiku un pārejas minūtes —
           sistēma aprēķinās intervālus un tabulu.
