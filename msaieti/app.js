@@ -45,6 +45,13 @@
   let logsCache = [];
   /** @type {{ phase: 'numbers'|'names', numberScheme: 'prefix'|'legacy' }} */
   let settingsCache = { phase: "numbers", numberScheme: "prefix" };
+  /** @type {{ startTime: string, endTime: string, transitionMin: number, stations: { room: string, organizerId: string }[] }} */
+  let carouselCache = {
+    startTime: "11:45",
+    endTime: "13:25",
+    transitionMin: 2,
+    stations: [],
+  };
   let saveTimer = null;
   let remoteEnabled = false;
   let syncState = "idle";
@@ -175,6 +182,7 @@
       teams: teamsCache,
       logs: logsCache.slice(-MAX_LOGS),
       settings: settingsCache,
+      carousel: carouselCache,
     };
     localStorage.setItem(STORAGE_DATA, JSON.stringify(payload));
   }
@@ -190,6 +198,19 @@
         phase: data.settings.phase === "names" ? "names" : "numbers",
         numberScheme:
           data.settings.numberScheme === "legacy" ? "legacy" : "prefix",
+      };
+    }
+    if (data.carousel && typeof data.carousel === "object") {
+      carouselCache = {
+        startTime: data.carousel.startTime || "11:45",
+        endTime: data.carousel.endTime || "13:25",
+        transitionMin:
+          typeof data.carousel.transitionMin === "number"
+            ? data.carousel.transitionMin
+            : parseInt(data.carousel.transitionMin, 10) || 2,
+        stations: Array.isArray(data.carousel.stations)
+          ? data.carousel.stations
+          : [],
       };
     }
   }
@@ -209,6 +230,7 @@
       teams: teamsCache,
       logs: logsCache.slice(-MAX_LOGS),
       settings: settingsCache,
+      carousel: carouselCache,
     };
     const res = await fetch(REMOTE_URL, {
       method: "POST",
@@ -324,6 +346,7 @@
     renderTeams();
     renderPeople();
     renderDistribute();
+    renderCarousel();
     if (currentUser && currentUser.isAdmin) {
       renderUsers();
       renderLogs();
@@ -1342,6 +1365,232 @@
     return null;
   }
 
+  // ---------- Carousel ----------
+  function parseTimeToMinutes(hhmm) {
+    if (!hhmm || typeof hhmm !== "string") return null;
+    const m = hhmm.trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+    return h * 60 + min;
+  }
+
+  function minutesToTime(total) {
+    const h = Math.floor(total / 60) % 24;
+    const m = total % 60;
+    return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+  }
+
+  /** Ensure stations array length matches team count; preserve existing room/organizer. */
+  function syncCarouselStations() {
+    const y = teamsCache.length;
+    const prev = Array.isArray(carouselCache.stations)
+      ? carouselCache.stations
+      : [];
+    const next = [];
+    for (let i = 0; i < y; i++) {
+      next.push({
+        room: prev[i] && prev[i].room != null ? String(prev[i].room) : "",
+        organizerId:
+          prev[i] && prev[i].organizerId != null
+            ? String(prev[i].organizerId)
+            : "",
+      });
+    }
+    carouselCache.stations = next;
+  }
+
+  /**
+   * Build schedule rows.
+   * slotMin = floor((end-start) / y)
+   * stationMin = slotMin - transitionMin
+   * Station i starts at start + i*slotMin, ends at start + stationMin
+   * Transition row after each station except the last.
+   */
+  function buildCarouselSchedule() {
+    const y = teamsCache.length;
+    const startM = parseTimeToMinutes(carouselCache.startTime);
+    const endM = parseTimeToMinutes(carouselCache.endTime);
+    const trans = Math.max(0, parseInt(carouselCache.transitionMin, 10) || 0);
+
+    if (!y || startM == null || endM == null || endM <= startM) {
+      return { ok: false, rows: [], slotMin: 0, stationMin: 0, totalMin: 0 };
+    }
+
+    const totalMin = endM - startM;
+    const slotMin = Math.floor(totalMin / y);
+    const stationMin = Math.max(0, slotMin - trans);
+
+    if (slotMin <= 0) {
+      return { ok: false, rows: [], slotMin: 0, stationMin: 0, totalMin };
+    }
+
+    const rows = [];
+    for (let i = 0; i < y; i++) {
+      const sStart = startM + i * slotMin;
+      const sEnd = sStart + stationMin;
+      rows.push({
+        type: "station",
+        index: i + 1,
+        start: minutesToTime(sStart),
+        end: minutesToTime(sEnd),
+        minutes: stationMin,
+      });
+      if (i < y - 1 && trans > 0) {
+        rows.push({
+          type: "transition",
+          index: null,
+          start: minutesToTime(sEnd),
+          end: minutesToTime(sEnd + trans),
+          minutes: trans,
+        });
+      }
+    }
+    return { ok: true, rows, slotMin, stationMin, totalMin, y };
+  }
+
+  function readCarouselForm() {
+    const startEl = $("#car-start");
+    const endEl = $("#car-end");
+    const transEl = $("#car-transition");
+    if (startEl && startEl.value) carouselCache.startTime = startEl.value;
+    if (endEl && endEl.value) carouselCache.endTime = endEl.value;
+    if (transEl) {
+      const v = parseInt(transEl.value, 10);
+      carouselCache.transitionMin = isNaN(v) ? 0 : Math.max(0, v);
+    }
+  }
+
+  function renderCarousel() {
+    syncCarouselStations();
+
+    const startEl = $("#car-start");
+    const endEl = $("#car-end");
+    const transEl = $("#car-transition");
+    if (startEl) startEl.value = carouselCache.startTime || "11:45";
+    if (endEl) endEl.value = carouselCache.endTime || "13:25";
+    if (transEl) transEl.value = String(carouselCache.transitionMin ?? 2);
+
+    const sched = buildCarouselSchedule();
+    const summary = $("#car-summary");
+    if (summary) {
+      if (!teamsCache.length) {
+        summary.textContent = "Komandu skaits: 0";
+      } else if (!sched.ok) {
+        summary.innerHTML =
+          '<span class="text-danger">Pārbaudiet laikus (beigas > sākums).</span>';
+      } else {
+        const th = Math.floor(sched.totalMin / 60);
+        const tm = sched.totalMin % 60;
+        summary.innerHTML =
+          `<strong>${sched.y}</strong> stacijas · kopā ${th}h ${tm}min · ` +
+          `slots <strong>${sched.slotMin} min</strong> · ` +
+          `stacija <strong>${sched.stationMin} min</strong> · ` +
+          `pāreja ${carouselCache.transitionMin} min`;
+      }
+    }
+
+    const tbody = $("#car-schedule-tbody");
+    if (tbody) {
+      if (!sched.ok || !sched.rows.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="4" class="text-muted text-center">' +
+          (teamsCache.length
+            ? "Neizdevās aprēķināt — pārbaudiet laikus."
+            : "Nav komandu — izveidojiet tās vispirms.") +
+          "</td></tr>";
+      } else {
+        tbody.innerHTML = sched.rows
+          .map((r) => {
+            if (r.type === "transition") {
+              return `<tr class="table-secondary">
+                <td class="text-muted small">Pāreja</td>
+                <td>${escapeHtml(r.start)}</td>
+                <td>${escapeHtml(r.end)}</td>
+                <td>${r.minutes}</td>
+              </tr>`;
+            }
+            return `<tr>
+              <td><strong>${r.index}</strong></td>
+              <td>${escapeHtml(r.start)}</td>
+              <td>${escapeHtml(r.end)}</td>
+              <td>${r.minutes}</td>
+            </tr>`;
+          })
+          .join("");
+      }
+    }
+
+    const stBody = $("#car-stations-tbody");
+    if (stBody) {
+      if (!carouselCache.stations.length) {
+        stBody.innerHTML =
+          '<tr><td colspan="3" class="text-muted text-center">Nav staciju.</td></tr>';
+      } else {
+        const orgOpts = usersCache
+          .map((u) => {
+            const label = (u.name || u.username || u.id) +
+              (u.role === "helper" ? " (palīgs)" : "");
+            return { id: u.id, label };
+          })
+          .sort((a, b) => a.label.localeCompare(b.label, "lv"));
+
+        stBody.innerHTML = carouselCache.stations
+          .map((s, i) => {
+            const opts = orgOpts
+              .map(
+                (o) =>
+                  `<option value="${escapeHtml(o.id)}" ${
+                    s.organizerId === o.id ? "selected" : ""
+                  }>${escapeHtml(o.label)}</option>`
+              )
+              .join("");
+            return `<tr>
+              <td><strong>${i + 1}</strong></td>
+              <td><input type="text" class="form-control form-control-sm car-room" data-idx="${i}" value="${escapeHtml(
+              s.room || ""
+            )}" placeholder="Piem. 201"></td>
+              <td>
+                <select class="form-select form-select-sm car-org" data-idx="${i}">
+                  <option value="">— Izvēlēties —</option>
+                  ${opts}
+                </select>
+              </td>
+            </tr>`;
+          })
+          .join("");
+      }
+    }
+  }
+
+  function saveCarouselFromForm() {
+    readCarouselForm();
+    syncCarouselStations();
+    // rooms/orgs from inputs
+    document.querySelectorAll(".car-room").forEach((el) => {
+      const idx = parseInt(el.dataset.idx, 10);
+      if (
+        !isNaN(idx) &&
+        carouselCache.stations[idx]
+      ) {
+        carouselCache.stations[idx].room = (el.value || "").trim();
+      }
+    });
+    document.querySelectorAll(".car-org").forEach((el) => {
+      const idx = parseInt(el.dataset.idx, 10);
+      if (
+        !isNaN(idx) &&
+        carouselCache.stations[idx]
+      ) {
+        carouselCache.stations[idx].organizerId = el.value || "";
+      }
+    });
+    addLog("edit_team", "karuselis saglabāts");
+    scheduleSave();
+    renderCarousel();
+  }
+
   // ---------- Login / logout ----------
   async function tryLogin() {
     const username = ($("#username-input").value || "").trim();
@@ -1912,6 +2161,40 @@
     if ($("#btn-phase-names")) {
       $("#btn-phase-names").addEventListener("click", () => setPhase("names"));
     }
+    if ($("#btn-car-recalc")) {
+      $("#btn-car-recalc").addEventListener("click", () => {
+        readCarouselForm();
+        renderCarousel();
+      });
+    }
+    if ($("#btn-car-save")) {
+      $("#btn-car-save").addEventListener("click", saveCarouselFromForm);
+    }
+    // Live recalc on time/transition change
+    ["car-start", "car-end", "car-transition"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener("change", () => {
+          readCarouselForm();
+          renderCarousel();
+          scheduleSave();
+        });
+      }
+    });
+    document.addEventListener("change", (e) => {
+      const t = e.target;
+      if (!t || !t.classList) return;
+      if (t.classList.contains("car-room") || t.classList.contains("car-org")) {
+        const idx = parseInt(t.dataset.idx, 10);
+        if (isNaN(idx) || !carouselCache.stations[idx]) return;
+        if (t.classList.contains("car-room")) {
+          carouselCache.stations[idx].room = (t.value || "").trim();
+        } else {
+          carouselCache.stations[idx].organizerId = t.value || "";
+        }
+        scheduleSave();
+      }
+    });
     if ($("#number-scheme")) {
       $("#number-scheme").addEventListener("change", () => {
         settingsCache.numberScheme =
