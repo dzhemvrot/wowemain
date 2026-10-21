@@ -45,7 +45,7 @@
   let logsCache = [];
   /** @type {{ phase: 'numbers'|'names', numberScheme: 'prefix'|'legacy' }} */
   let settingsCache = { phase: "numbers", numberScheme: "prefix" };
-  /** @type {{ startTime: string, endTime: string, transitionMin: number, stations: { room: string, organizerId: string }[] }} */
+  /** @type {{ startTime: string, endTime: string, transitionMin: number, stations: { room: string, organizerIds: string[] }[] }} */
   let carouselCache = {
     startTime: "11:45",
     endTime: "13:25",
@@ -209,7 +209,7 @@
             ? data.carousel.transitionMin
             : parseInt(data.carousel.transitionMin, 10) || 2,
         stations: Array.isArray(data.carousel.stations)
-          ? data.carousel.stations
+          ? data.carousel.stations.map(normalizeStation)
           : [],
       };
     }
@@ -1382,23 +1382,46 @@
     return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
   }
 
-  /** Ensure stations array length matches team count; preserve existing room/organizer. */
+  function normalizeStation(s) {
+    if (!s || typeof s !== "object") return { room: "", organizerIds: [] };
+    let ids = [];
+    if (Array.isArray(s.organizerIds)) {
+      ids = s.organizerIds.map(String).filter(Boolean);
+    } else if (s.organizerId) {
+      ids = [String(s.organizerId)];
+    }
+    return {
+      room: s.room != null ? String(s.room) : "",
+      organizerIds: ids,
+    };
+  }
+
+  /** Ensure stations array length matches team count; preserve existing room/organizers. */
   function syncCarouselStations() {
     const y = teamsCache.length;
     const prev = Array.isArray(carouselCache.stations)
-      ? carouselCache.stations
+      ? carouselCache.stations.map(normalizeStation)
       : [];
     const next = [];
     for (let i = 0; i < y; i++) {
-      next.push({
-        room: prev[i] && prev[i].room != null ? String(prev[i].room) : "",
-        organizerId:
-          prev[i] && prev[i].organizerId != null
-            ? String(prev[i].organizerId)
-            : "",
-      });
+      next.push(
+        prev[i]
+          ? normalizeStation(prev[i])
+          : { room: "", organizerIds: [] }
+      );
     }
     carouselCache.stations = next;
+  }
+
+  function normalizeTimeInput(val) {
+    if (!val) return null;
+    let s = String(val).trim().replace(/\./g, ":");
+    const m = s.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+    return String(h).padStart(2, "0") + ":" + String(min).padStart(2, "0");
   }
 
   /**
@@ -1454,8 +1477,20 @@
     const startEl = $("#car-start");
     const endEl = $("#car-end");
     const transEl = $("#car-transition");
-    if (startEl && startEl.value) carouselCache.startTime = startEl.value;
-    if (endEl && endEl.value) carouselCache.endTime = endEl.value;
+    if (startEl) {
+      const n = normalizeTimeInput(startEl.value);
+      if (n) {
+        carouselCache.startTime = n;
+        startEl.value = n;
+      }
+    }
+    if (endEl) {
+      const n = normalizeTimeInput(endEl.value);
+      if (n) {
+        carouselCache.endTime = n;
+        endEl.value = n;
+      }
+    }
     if (transEl) {
       const v = parseInt(transEl.value, 10);
       carouselCache.transitionMin = isNaN(v) ? 0 : Math.max(0, v);
@@ -1530,7 +1565,8 @@
       } else {
         const orgOpts = usersCache
           .map((u) => {
-            const label = (u.name || u.username || u.id) +
+            const label =
+              (u.name || u.username || u.id) +
               (u.role === "helper" ? " (palīgs)" : "");
             return { id: u.id, label };
           })
@@ -1538,22 +1574,23 @@
 
         stBody.innerHTML = carouselCache.stations
           .map((s, i) => {
+            const selected = new Set(s.organizerIds || []);
             const opts = orgOpts
               .map(
                 (o) =>
                   `<option value="${escapeHtml(o.id)}" ${
-                    s.organizerId === o.id ? "selected" : ""
+                    selected.has(o.id) ? "selected" : ""
                   }>${escapeHtml(o.label)}</option>`
               )
               .join("");
+            const size = Math.min(6, Math.max(3, orgOpts.length || 3));
             return `<tr>
               <td><strong>${i + 1}</strong></td>
               <td><input type="text" class="form-control form-control-sm car-room" data-idx="${i}" value="${escapeHtml(
               s.room || ""
             )}" placeholder="Piem. 201"></td>
               <td>
-                <select class="form-select form-select-sm car-org" data-idx="${i}">
-                  <option value="">— Izvēlēties —</option>
+                <select class="form-select form-select-sm car-org" data-idx="${i}" multiple size="${size}">
                   ${opts}
                 </select>
               </td>
@@ -1562,28 +1599,84 @@
           .join("");
       }
     }
+
+    renderCarouselRoutes(sched);
+  }
+
+  /** Team routes: team t at period p → station (t + p) % n */
+  function renderCarouselRoutes(sched) {
+    const thead = $("#car-routes-thead");
+    const tbody = $("#car-routes-tbody");
+    if (!thead || !tbody) return;
+
+    const y = teamsCache.length;
+    if (!y || !sched || !sched.ok) {
+      thead.innerHTML = "";
+      tbody.innerHTML =
+        '<tr><td class="text-muted text-center">Nav datu maršrutiem.</td></tr>';
+      return;
+    }
+
+    const teams = [...teamsCache].sort(
+      (a, b) => (a.number || 0) - (b.number || 0)
+    );
+    const stationRows = (sched.rows || []).filter((r) => r.type === "station");
+
+    // Header: Komanda | 1. posms (11:45–11:52) | 2. posms | ...
+    let head =
+      "<tr><th>Komanda</th>";
+    for (let p = 0; p < y; p++) {
+      const sr = stationRows[p];
+      const timeLabel = sr
+        ? `${sr.start}–${sr.end}`
+        : `posms ${p + 1}`;
+      head += `<th class="text-center small">#${p + 1}<br><span class="text-muted fw-normal">${escapeHtml(
+        timeLabel
+      )}</span></th>`;
+    }
+    head += "<th>Maršruts</th></tr>";
+    thead.innerHTML = head;
+
+    tbody.innerHTML = teams
+      .map((team, tIdx) => {
+        const cells = [];
+        const routeRooms = [];
+        for (let p = 0; p < y; p++) {
+          const stIdx = (tIdx + p) % y;
+          const st = carouselCache.stations[stIdx] || {};
+          const room = (st.room || "").trim() || `st. ${stIdx + 1}`;
+          routeRooms.push(room);
+          cells.push(
+            `<td class="text-center"><strong>${escapeHtml(room)}</strong><div class="text-muted small">st. ${
+              stIdx + 1
+            }</div></td>`
+          );
+        }
+        return `<tr>
+          <td class="text-nowrap"><strong>${escapeHtml(teamLabel(team))}</strong></td>
+          ${cells.join("")}
+          <td class="small text-nowrap">${routeRooms
+            .map((r) => escapeHtml(r))
+            .join(" → ")}</td>
+        </tr>`;
+      })
+      .join("");
   }
 
   function saveCarouselFromForm() {
     readCarouselForm();
     syncCarouselStations();
-    // rooms/orgs from inputs
     document.querySelectorAll(".car-room").forEach((el) => {
       const idx = parseInt(el.dataset.idx, 10);
-      if (
-        !isNaN(idx) &&
-        carouselCache.stations[idx]
-      ) {
+      if (!isNaN(idx) && carouselCache.stations[idx]) {
         carouselCache.stations[idx].room = (el.value || "").trim();
       }
     });
     document.querySelectorAll(".car-org").forEach((el) => {
       const idx = parseInt(el.dataset.idx, 10);
-      if (
-        !isNaN(idx) &&
-        carouselCache.stations[idx]
-      ) {
-        carouselCache.stations[idx].organizerId = el.value || "";
+      if (!isNaN(idx) && carouselCache.stations[idx]) {
+        const selected = [...el.selectedOptions].map((o) => o.value).filter(Boolean);
+        carouselCache.stations[idx].organizerIds = selected;
       }
     });
     addLog("edit_team", "karuselis saglabāts");
@@ -2189,8 +2282,13 @@
         if (isNaN(idx) || !carouselCache.stations[idx]) return;
         if (t.classList.contains("car-room")) {
           carouselCache.stations[idx].room = (t.value || "").trim();
+          renderCarouselRoutes(buildCarouselSchedule());
         } else {
-          carouselCache.stations[idx].organizerId = t.value || "";
+          carouselCache.stations[idx].organizerIds = [
+            ...t.selectedOptions,
+          ]
+            .map((o) => o.value)
+            .filter(Boolean);
         }
         scheduleSave();
       }
