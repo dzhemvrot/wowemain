@@ -359,6 +359,10 @@
     if (panel) panel.classList.remove("d-none");
     const btn = document.querySelector(`#main-tabs [data-tab="${tabId}"]`);
     if (btn) btn.classList.add("active");
+    if (tabId === "tab-charts") {
+      // Charts need visible canvas to size correctly
+      setTimeout(() => renderCharts(), 50);
+    }
   }
 
   // ---------- Render ----------
@@ -367,10 +371,281 @@
     renderPeople();
     renderDistribute();
     renderCarousel();
+    renderCharts();
     if (currentUser && currentUser.isAdmin) {
       renderUsers();
       renderLogs();
     }
+  }
+
+  // ---------- Charts ----------
+  let chartTeamsBar = null;
+  let chartClassesPie = null;
+  /** @type {Record<string, import('chart.js').Chart>} */
+  let chartPieGrid = {};
+
+  const CHART_COLORS = [
+    "#841414",
+    "#0d6efd",
+    "#198754",
+    "#fd7e14",
+    "#6f42c1",
+    "#20c997",
+    "#d63384",
+    "#0dcaf0",
+    "#ffc107",
+    "#6c757d",
+    "#6610f2",
+    "#dc3545",
+  ];
+
+  function sortedTeams() {
+    return [...teamsCache].sort((a, b) => (a.number || 0) - (b.number || 0));
+  }
+
+  function teamMemberCounts() {
+    return sortedTeams().map((t) => ({
+      team: t,
+      count: peopleCache.filter(
+        (p) => p.type === "participant" && p.teamId === t.id
+      ).length,
+    }));
+  }
+
+  function teamClassBreakdown(teamId) {
+    const members = peopleCache.filter(
+      (p) => p.type === "participant" && p.teamId === teamId
+    );
+    const by = {};
+    for (const p of members) {
+      const k = classLabel(p);
+      by[k] = (by[k] || 0) + 1;
+    }
+    const labels = Object.keys(by).sort((a, b) => a.localeCompare(b, "lv"));
+    return {
+      labels,
+      data: labels.map((l) => by[l]),
+      total: members.length,
+    };
+  }
+
+  function destroyChart(ch) {
+    if (ch && typeof ch.destroy === "function") {
+      try {
+        ch.destroy();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+
+  function renderCharts() {
+    if (typeof Chart === "undefined") return;
+    renderBarChart();
+    fillPieTeamSelect();
+    renderPieCharts();
+  }
+
+  function renderBarChart() {
+    const canvas = $("#chart-teams-count");
+    const empty = $("#chart-bar-empty");
+    if (!canvas) return;
+    const counts = teamMemberCounts();
+    const hasData = counts.some((c) => c.count > 0);
+    if (empty) empty.classList.toggle("d-none", hasData || !counts.length);
+    if (!counts.length) {
+      destroyChart(chartTeamsBar);
+      chartTeamsBar = null;
+      return;
+    }
+    const labels = counts.map((c) => teamLabel(c.team));
+    const data = counts.map((c) => c.count);
+    const ctx = canvas.getContext("2d");
+    if (chartTeamsBar) {
+      chartTeamsBar.data.labels = labels;
+      chartTeamsBar.data.datasets[0].data = data;
+      chartTeamsBar.update();
+      return;
+    }
+    chartTeamsBar = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Dalībnieki",
+            data,
+            backgroundColor: "#841414",
+            borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { display: false },
+          title: {
+            display: true,
+            text: "Dalībnieku skaits komandās",
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { stepSize: 1 },
+            title: { display: true, text: "Bērni" },
+          },
+          x: {
+            ticks: {
+              maxRotation: 45,
+              minRotation: 0,
+              autoSkip: false,
+              font: { size: 10 },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  function fillPieTeamSelect() {
+    const sel = $("#chart-pie-team");
+    if (!sel) return;
+    const prev = sel.value || "__all__";
+    sel.innerHTML = '<option value="__all__">Visas komandas</option>';
+    for (const t of sortedTeams()) {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = teamLabel(t);
+      sel.appendChild(opt);
+    }
+    if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+    else sel.value = "__all__";
+  }
+
+  function renderPieCharts() {
+    const sel = $("#chart-pie-team");
+    const teamId = (sel && sel.value) || "__all__";
+    const singleWrap = $("#chart-pie-single-wrap");
+    const grid = $("#chart-pie-grid");
+    const empty = $("#chart-pie-empty");
+    if (!grid) return;
+
+    // Clear grid charts
+    Object.keys(chartPieGrid).forEach((k) => {
+      destroyChart(chartPieGrid[k]);
+      delete chartPieGrid[k];
+    });
+    grid.innerHTML = "";
+
+    if (teamId === "__all__") {
+      if (singleWrap) singleWrap.classList.add("d-none");
+      destroyChart(chartClassesPie);
+      chartClassesPie = null;
+
+      const teams = sortedTeams();
+      let any = false;
+      for (const t of teams) {
+        const br = teamClassBreakdown(t.id);
+        if (!br.total) continue;
+        any = true;
+        const col = document.createElement("div");
+        col.className = "col-md-6 col-lg-4";
+        col.innerHTML = `<div class="card shadow-sm h-100"><div class="card-body">
+          <h3 class="h6 text-center mb-2">${escapeHtml(teamLabel(t))} <span class="text-muted">(${br.total})</span></h3>
+          <canvas height="180"></canvas>
+        </div></div>`;
+        grid.appendChild(col);
+        const canvas = col.querySelector("canvas");
+        chartPieGrid[t.id] = new Chart(canvas.getContext("2d"), {
+          type: "pie",
+          data: {
+            labels: br.labels,
+            datasets: [
+              {
+                data: br.data,
+                backgroundColor: br.labels.map(
+                  (_, i) => CHART_COLORS[i % CHART_COLORS.length]
+                ),
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: "bottom",
+                labels: { boxWidth: 12, font: { size: 11 } },
+              },
+            },
+          },
+        });
+      }
+      if (empty) empty.classList.toggle("d-none", any);
+      return;
+    }
+
+    // Single team
+    if (empty) empty.classList.add("d-none");
+    if (singleWrap) singleWrap.classList.remove("d-none");
+    const br = teamClassBreakdown(teamId);
+    const canvas = $("#chart-classes-pie");
+    if (!canvas) return;
+    if (!br.total) {
+      if (singleWrap) singleWrap.classList.add("d-none");
+      if (empty) empty.classList.remove("d-none");
+      destroyChart(chartClassesPie);
+      chartClassesPie = null;
+      return;
+    }
+    const cfg = {
+      labels: br.labels,
+      datasets: [
+        {
+          data: br.data,
+          backgroundColor: br.labels.map(
+            (_, i) => CHART_COLORS[i % CHART_COLORS.length]
+          ),
+        },
+      ],
+    };
+    if (chartClassesPie) {
+      chartClassesPie.data.labels = cfg.labels;
+      chartClassesPie.data.datasets = cfg.datasets;
+      chartClassesPie.update();
+      return;
+    }
+    chartClassesPie = new Chart(canvas.getContext("2d"), {
+      type: "pie",
+      data: cfg,
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: "bottom" },
+          title: {
+            display: true,
+            text: "Klases komandā",
+          },
+        },
+      },
+    });
+  }
+
+  function switchChartSub(subId) {
+    document.querySelectorAll(".chart-subpanel").forEach((p) =>
+      p.classList.add("d-none")
+    );
+    document.querySelectorAll("#chart-subtabs .nav-link").forEach((b) =>
+      b.classList.remove("active")
+    );
+    const panel = document.getElementById(subId);
+    if (panel) panel.classList.remove("d-none");
+    const btn = document.querySelector(
+      `#chart-subtabs [data-chart-sub="${subId}"]`
+    );
+    if (btn) btn.classList.add("active");
+    setTimeout(() => renderCharts(), 50);
   }
 
   function firstName(full) {
@@ -2490,6 +2765,14 @@
     document.querySelectorAll("#main-tabs [data-tab]").forEach((btn) => {
       btn.addEventListener("click", () => switchTab(btn.getAttribute("data-tab")));
     });
+    document.querySelectorAll("#chart-subtabs [data-chart-sub]").forEach((btn) => {
+      btn.addEventListener("click", () =>
+        switchChartSub(btn.getAttribute("data-chart-sub"))
+      );
+    });
+    if ($("#chart-pie-team")) {
+      $("#chart-pie-team").addEventListener("change", () => renderPieCharts());
+    }
 
     $("#btn-add-person").addEventListener("click", () => {
       openPersonModal(null);

@@ -115,6 +115,9 @@
         <li class="nav-item">
           <button class="nav-link" data-tab="tab-carousel">Karuselis</button>
         </li>
+        <li class="nav-item">
+          <button class="nav-link" data-tab="tab-charts">Grafiki</button>
+        </li>
         <li class="nav-item admin-only d-none">
           <button class="nav-link" data-tab="tab-users">Lietotāji</button>
         </li>
@@ -364,6 +367,46 @@
             <thead class="table-light" id="car-routes-thead"></thead>
             <tbody id="car-routes-tbody"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- CHARTS TAB -->
+      <div id="tab-charts" class="tab-panel d-none">
+        <h2 class="section-title">Grafiki</h2>
+        <ul class="nav nav-tabs mb-3" id="chart-subtabs">
+          <li class="nav-item">
+            <button class="nav-link active" type="button" data-chart-sub="chart-bar">Bērni komandās</button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" type="button" data-chart-sub="chart-pie">Klases komandās</button>
+          </li>
+        </ul>
+
+        <div id="chart-bar" class="chart-subpanel">
+          <p class="small text-muted mb-2">Dalībnieku skaits katrā komandā (stabiņu diagramma).</p>
+          <div class="card shadow-sm">
+            <div class="card-body" style="min-height:320px">
+              <canvas id="chart-teams-count" height="120"></canvas>
+            </div>
+          </div>
+          <div id="chart-bar-empty" class="text-muted text-center py-4 d-none">Nav komandu vai dalībnieku ar piešķirtu komandu.</div>
+        </div>
+
+        <div id="chart-pie" class="chart-subpanel d-none">
+          <p class="small text-muted mb-2">Klases sastāvs katrā komandā (apļa diagrammas).</p>
+          <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+            <label class="small mb-0" for="chart-pie-team">Komanda:</label>
+            <select class="form-select form-select-sm" style="max-width:280px" id="chart-pie-team">
+              <option value="__all__">Visas komandas</option>
+            </select>
+          </div>
+          <div id="chart-pie-single-wrap" class="card shadow-sm d-none">
+            <div class="card-body" style="max-width:420px;margin:0 auto">
+              <canvas id="chart-classes-pie" height="200"></canvas>
+            </div>
+          </div>
+          <div id="chart-pie-grid" class="row g-3"></div>
+          <div id="chart-pie-empty" class="text-muted text-center py-4 d-none">Nav datu.</div>
         </div>
       </div>
 
@@ -642,6 +685,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
