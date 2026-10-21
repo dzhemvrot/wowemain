@@ -247,19 +247,39 @@
     remoteEnabled = hasRemote();
     syncState = "loading";
     updateSyncBadge();
+    const localBackup = loadLocal();
     try {
       if (remoteEnabled) {
         const data = await fetchRemote();
         applyPayload(data);
+        // If remote has no carousel yet (old deploy), keep local stations
+        if (
+          (!data.carousel ||
+            !Array.isArray(data.carousel.stations) ||
+            !data.carousel.stations.length) &&
+          localBackup.carousel &&
+          Array.isArray(localBackup.carousel.stations) &&
+          localBackup.carousel.stations.length
+        ) {
+          carouselCache = {
+            startTime: localBackup.carousel.startTime || carouselCache.startTime,
+            endTime: localBackup.carousel.endTime || carouselCache.endTime,
+            transitionMin:
+              localBackup.carousel.transitionMin != null
+                ? localBackup.carousel.transitionMin
+                : carouselCache.transitionMin,
+            stations: localBackup.carousel.stations.map(normalizeStation),
+          };
+        }
         saveLocal();
         syncState = "ok";
       } else {
-        applyPayload(loadLocal());
+        applyPayload(localBackup);
         syncState = "local";
       }
     } catch (err) {
       console.warn("Remote load failed, using local", err);
-      applyPayload(loadLocal());
+      applyPayload(localBackup);
       syncState = "error";
     }
     updateSyncBadge();
@@ -1575,24 +1595,36 @@
         stBody.innerHTML = carouselCache.stations
           .map((s, i) => {
             const selected = new Set(s.organizerIds || []);
-            const opts = orgOpts
+            const checks = orgOpts
               .map(
                 (o) =>
-                  `<option value="${escapeHtml(o.id)}" ${
-                    selected.has(o.id) ? "selected" : ""
-                  }>${escapeHtml(o.label)}</option>`
+                  `<label class="d-inline-flex align-items-center gap-1 me-2 mb-1 small user-select-none">
+                    <input type="checkbox" class="form-check-input car-org-cb" data-idx="${i}" value="${escapeHtml(
+                    o.id
+                  )}" ${selected.has(o.id) ? "checked" : ""}>
+                    <span>${escapeHtml(o.label)}</span>
+                  </label>`
               )
               .join("");
-            const size = Math.min(6, Math.max(3, orgOpts.length || 3));
+            const chosenNames = orgOpts
+              .filter((o) => selected.has(o.id))
+              .map((o) => o.label);
             return `<tr>
               <td><strong>${i + 1}</strong></td>
-              <td><input type="text" class="form-control form-control-sm car-room" data-idx="${i}" value="${escapeHtml(
+              <td style="min-width:7rem">
+                <input type="text" class="form-control form-control-sm car-room" data-idx="${i}" value="${escapeHtml(
               s.room || ""
-            )}" placeholder="Piem. 201"></td>
+            )}" placeholder="Piem. 201">
+              </td>
               <td>
-                <select class="form-select form-select-sm car-org" data-idx="${i}" multiple size="${size}">
-                  ${opts}
-                </select>
+                <div class="car-org-list border rounded p-2" style="max-height:8rem;overflow:auto;background:#fafafa">
+                  ${checks || '<span class="text-muted small">Nav lietotāju</span>'}
+                </div>
+                <div class="form-text small mt-1 car-org-summary" data-idx="${i}">${
+              chosenNames.length
+                ? "Izvēlēti: " + escapeHtml(chosenNames.join(", "))
+                : "Neviens nav izvēlēts"
+            }</div>
               </td>
             </tr>`;
           })
@@ -1601,6 +1633,30 @@
     }
 
     renderCarouselRoutes(sched);
+  }
+
+  /** Read rooms + organizers from DOM into carouselCache (before any re-render). */
+  function captureCarouselStationsFromDom() {
+    syncCarouselStations();
+    document.querySelectorAll(".car-room").forEach((el) => {
+      const idx = parseInt(el.dataset.idx, 10);
+      if (!isNaN(idx) && carouselCache.stations[idx]) {
+        carouselCache.stations[idx].room = (el.value || "").trim();
+      }
+    });
+    // Collect checkboxes per station
+    const byIdx = {};
+    document.querySelectorAll(".car-org-cb").forEach((el) => {
+      const idx = parseInt(el.dataset.idx, 10);
+      if (isNaN(idx) || !carouselCache.stations[idx]) return;
+      if (!byIdx[idx]) byIdx[idx] = [];
+      if (el.checked && el.value) byIdx[idx].push(el.value);
+    });
+    Object.keys(byIdx).forEach((k) => {
+      const idx = parseInt(k, 10);
+      carouselCache.stations[idx].organizerIds = byIdx[idx];
+    });
+    // If no checkboxes in DOM for a station, leave existing organizerIds
   }
 
   /** Team routes: team t at period p → station (t + p) % n */
@@ -1665,20 +1721,7 @@
 
   function saveCarouselFromForm() {
     readCarouselForm();
-    syncCarouselStations();
-    document.querySelectorAll(".car-room").forEach((el) => {
-      const idx = parseInt(el.dataset.idx, 10);
-      if (!isNaN(idx) && carouselCache.stations[idx]) {
-        carouselCache.stations[idx].room = (el.value || "").trim();
-      }
-    });
-    document.querySelectorAll(".car-org").forEach((el) => {
-      const idx = parseInt(el.dataset.idx, 10);
-      if (!isNaN(idx) && carouselCache.stations[idx]) {
-        const selected = [...el.selectedOptions].map((o) => o.value).filter(Boolean);
-        carouselCache.stations[idx].organizerIds = selected;
-      }
-    });
+    captureCarouselStationsFromDom();
     addLog("edit_team", "karuselis saglabāts");
     scheduleSave();
     renderCarousel();
@@ -2274,21 +2317,46 @@
         });
       }
     });
+    document.addEventListener("input", (e) => {
+      const t = e.target;
+      if (!t || !t.classList || !t.classList.contains("car-room")) return;
+      const idx = parseInt(t.dataset.idx, 10);
+      if (isNaN(idx) || !carouselCache.stations[idx]) return;
+      carouselCache.stations[idx].room = (t.value || "").trim();
+      scheduleSave();
+      renderCarouselRoutes(buildCarouselSchedule());
+    });
     document.addEventListener("change", (e) => {
       const t = e.target;
       if (!t || !t.classList) return;
-      if (t.classList.contains("car-room") || t.classList.contains("car-org")) {
+      if (t.classList.contains("car-room")) {
         const idx = parseInt(t.dataset.idx, 10);
         if (isNaN(idx) || !carouselCache.stations[idx]) return;
-        if (t.classList.contains("car-room")) {
-          carouselCache.stations[idx].room = (t.value || "").trim();
-          renderCarouselRoutes(buildCarouselSchedule());
-        } else {
-          carouselCache.stations[idx].organizerIds = [
-            ...t.selectedOptions,
-          ]
-            .map((o) => o.value)
+        carouselCache.stations[idx].room = (t.value || "").trim();
+        scheduleSave();
+        renderCarouselRoutes(buildCarouselSchedule());
+      } else if (t.classList.contains("car-org-cb")) {
+        const idx = parseInt(t.dataset.idx, 10);
+        if (isNaN(idx) || !carouselCache.stations[idx]) return;
+        const ids = [
+          ...document.querySelectorAll(
+            `.car-org-cb[data-idx="${idx}"]:checked`
+          ),
+        ].map((el) => el.value);
+        carouselCache.stations[idx].organizerIds = ids;
+        const summary = document.querySelector(
+          `.car-org-summary[data-idx="${idx}"]`
+        );
+        if (summary) {
+          const names = ids
+            .map((id) => {
+              const u = usersCache.find((x) => x.id === id);
+              return u ? u.name || u.username : id;
+            })
             .filter(Boolean);
+          summary.textContent = names.length
+            ? "Izvēlēti: " + names.join(", ")
+            : "Neviens nav izvēlēts";
         }
         scheduleSave();
       }
