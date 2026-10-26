@@ -381,19 +381,92 @@
     voteArchiveCache = Array.isArray(data.voteArchive) ? data.voteArchive : [];
   }
 
+  function normalizePeriods(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((p) => {
+        if (!p || typeof p !== "object") return null;
+        const from =
+          p.from && /^\d{4}-\d{2}-\d{2}$/.test(String(p.from))
+            ? String(p.from)
+            : null;
+        const until =
+          p.until && /^\d{4}-\d{2}-\d{2}$/.test(String(p.until))
+            ? String(p.until)
+            : null;
+        return { from, until };
+      })
+      .filter(Boolean);
+  }
+
+  /**
+   * Legacy migration: canVote true + no periods → open period from beginning.
+   * canVote stays derived from whether an open period exists.
+   */
+  function ensureVotePeriods(m) {
+    if (!m.voteRightsPeriods) m.voteRightsPeriods = [];
+    if (!m.voteRightsPeriods.length && m.canVote) {
+      // Backward compatible: existing voters had rights "from the start"
+      m.voteRightsPeriods = [{ from: null, until: null }];
+    }
+    m.canVote = memberHasOpenVoteRights(m);
+    return m;
+  }
+
+  function memberHasOpenVoteRights(m) {
+    const periods = m.voteRightsPeriods || [];
+    return periods.some((p) => !p.until);
+  }
+
+  /** True if member counted as a voter on that calendar date. */
+  function hasVoteRightsOn(m, dateStr) {
+    if (!m) return false;
+    ensureVotePeriods(m);
+    const periods = m.voteRightsPeriods || [];
+    if (!dateStr) return memberHasOpenVoteRights(m);
+    return periods.some((p) => {
+      const fromOk = !p.from || p.from <= dateStr;
+      const untilOk = !p.until || p.until >= dateStr;
+      return fromOk && untilOk;
+    });
+  }
+
+  function dayBeforeIso(iso) {
+    const [y, mo, d] = iso.split("-").map(Number);
+    const dt = new Date(y, mo - 1, d);
+    dt.setDate(dt.getDate() - 1);
+    return toISODate(dt);
+  }
+
+  function formatVotePeriods(m) {
+    ensureVotePeriods(m);
+    const periods = m.voteRightsPeriods || [];
+    if (!periods.length) return "—";
+    return periods
+      .map((p) => {
+        const a = p.from ? formatLatvianDate(p.from) : "sākums";
+        const b = p.until ? formatLatvianDate(p.until) : "…";
+        return a + "–" + b;
+      })
+      .join("; ");
+  }
+
   function normalizeMember(m) {
     if (!m || !m.name) return null;
     const joinedOn =
       m.joinedOn && /^\d{4}-\d{2}-\d{2}$/.test(String(m.joinedOn))
         ? String(m.joinedOn)
         : null; // null = no join date → eligible for all past dates
-    return {
+    const out = {
       id: m.id || newId("m"),
       name: String(m.name).trim(),
       canVote: !!m.canVote,
       joinedOn,
       cvSubmitted: !!m.cvSubmitted,
+      voteRightsPeriods: normalizePeriods(m.voteRightsPeriods),
     };
+    ensureVotePeriods(out);
+    return out;
   }
 
   /** Distinct meeting dates where member was present (after joinedOn). */
@@ -549,13 +622,7 @@
 
   function cloneSeedMembers() {
     const seed = typeof SEED_MEMBERS !== "undefined" ? SEED_MEMBERS : [];
-    return seed.map((m) => ({
-      id: m.id,
-      name: m.name,
-      canVote: !!m.canVote,
-      joinedOn: m.joinedOn || null,
-      cvSubmitted: !!m.cvSubmitted,
-    }));
+    return seed.map((m) => normalizeMember(m)).filter(Boolean);
   }
 
   function cloneSeedUsers() {
@@ -928,12 +995,41 @@
   // ---------- Members ----------
   function voters(dateStr) {
     const list = dateStr ? membersForDate(dateStr) : membersCache;
-    return list.filter((m) => m.canVote);
+    const d = dateStr || toISODate(new Date());
+    return list.filter((m) => hasVoteRightsOn(m, d));
   }
 
   function nonVoters(dateStr) {
     const list = dateStr ? membersForDate(dateStr) : membersCache;
-    return list.filter((m) => !m.canVote);
+    const d = dateStr || toISODate(new Date());
+    return list.filter((m) => !hasVoteRightsOn(m, d));
+  }
+
+  /** Open a new voting-rights period from `fromDate` (default today). */
+  function openVotePeriod(m, fromDate) {
+    ensureVotePeriods(m);
+    if (memberHasOpenVoteRights(m)) return false;
+    const from = fromDate || toISODate(new Date());
+    m.voteRightsPeriods.push({ from: from, until: null });
+    m.canVote = true;
+    return true;
+  }
+
+  /** Close the current open period ending yesterday (or day before fromDate). */
+  function closeVotePeriod(m, asOfDate) {
+    ensureVotePeriods(m);
+    const asOf = asOfDate || toISODate(new Date());
+    const open = m.voteRightsPeriods.find((p) => !p.until);
+    if (!open) {
+      m.canVote = false;
+      return false;
+    }
+    let until = dayBeforeIso(asOf);
+    // If period would end before it starts, end on the same day as from (or asOf)
+    if (open.from && until < open.from) until = open.from;
+    open.until = until;
+    m.canVote = false;
+    return true;
   }
 
   function addMember(name, canVote, joinedOn, cvSubmitted) {
@@ -942,18 +1038,24 @@
     let join = joinedOn && /^\d{4}-\d{2}-\d{2}$/.test(joinedOn) ? joinedOn : null;
     // Default new members to today so they don't appear on older meetings
     if (!join) join = toISODate(new Date());
-    membersCache.push({
+    const member = {
       id: newId("m"),
       name: n,
-      canVote: !!canVote,
+      canVote: false,
       joinedOn: join,
       cvSubmitted: !!cvSubmitted,
-    });
+      voteRightsPeriods: [],
+    };
+    if (canVote) {
+      // Rights start from join date so they don't affect earlier sessions
+      openVotePeriod(member, join);
+    }
+    membersCache.push(member);
     membersCache.sort((a, b) => a.name.localeCompare(b.name, "lv"));
     addLog(
       "add_member",
       n +
-        (canVote ? " (balsstiesības)" : "") +
+        (canVote ? " (balsstiesības no " + join + ")" : "") +
         (cvSubmitted ? " (CV)" : "") +
         " no " +
         formatLatvianDate(join)
@@ -991,9 +1093,14 @@
       alert("Vispirms atzīmē, ka CV/anketa ir iesniegta.");
       return;
     }
-    if (m.canVote) return;
-    m.canVote = true;
-    addLog("grant_vote", m.name + " (sēdes: " + sessions + ", CV: jā)");
+    ensureVotePeriods(m);
+    if (memberHasOpenVoteRights(m)) return;
+    const today = toISODate(new Date());
+    openVotePeriod(m, today);
+    addLog(
+      "grant_vote",
+      m.name + " no " + formatLatvianDate(today) + " (sēdes: " + sessions + ", CV: jā)"
+    );
     scheduleSave();
     renderMembersList();
     updateLiveQuorumBanner();
@@ -1036,8 +1143,21 @@
   function toggleVote(id) {
     const m = membersCache.find((x) => x.id === id);
     if (!m) return;
-    m.canVote = !m.canVote;
-    addLog("toggle_vote", m.name + " → " + (m.canVote ? "jā" : "nē"));
+    ensureVotePeriods(m);
+    const today = toISODate(new Date());
+    if (memberHasOpenVoteRights(m)) {
+      closeVotePeriod(m, today);
+      addLog(
+        "toggle_vote",
+        m.name + " · noņemtas no " + formatLatvianDate(today) + " (līdz " + formatVotePeriods(m) + ")"
+      );
+    } else {
+      openVotePeriod(m, today);
+      addLog(
+        "toggle_vote",
+        m.name + " · piešķirtas no " + formatLatvianDate(today)
+      );
+    }
     scheduleSave();
     renderMembersList();
     updateLiveQuorumBanner();
@@ -1049,14 +1169,19 @@
     if (!tbody) return;
     tbody.innerHTML = "";
     membersCache.forEach((m) => {
+      ensureVotePeriods(m);
       const tr = document.createElement("tr");
       const joinVal = m.joinedOn || "";
       const sessions = countPresentSessions(m.id);
       const abs = memberAbsenceStats(m.id, 60);
-      const ready = sessions >= 3 && m.cvSubmitted && !m.canVote;
+      const activeRights = memberHasOpenVoteRights(m);
+      const ready = sessions >= 3 && m.cvSubmitted && !activeRights;
       if (abs.overLimit) tr.classList.add("table-warning");
       tr.innerHTML = `
-        <td>${escapeHtml(m.name)}</td>
+        <td>
+          ${escapeHtml(m.name)}
+          <div class="small text-muted">${escapeHtml(formatVotePeriods(m))}</div>
+        </td>
         <td>
           <span class="${sessions >= 3 ? "text-success" : ""}">${sessions}/3</span>
           ${sessions >= 3 ? ' <span class="badge bg-success">gatavs</span>' : ""}
@@ -1064,7 +1189,7 @@
         <td>
           <input type="checkbox" class="form-check-input member-cv-cb" data-id="${escapeHtml(m.id)}" ${m.cvSubmitted ? "checked" : ""} title="CV / anketa iesniegta">
         </td>
-        <td>${m.canVote ? '<span class="text-success">Jā</span>' : "Nē"}</td>
+        <td>${activeRights ? '<span class="text-success">Jā</span>' : "Nē"}</td>
         <td>
           ${
             abs.overLimit
@@ -1086,7 +1211,7 @@
               : ""
           }
           <button type="button" class="btn btn-outline-secondary btn-sm btn-toggle-vote" data-id="${escapeHtml(m.id)}">
-            ${m.canVote ? "Noņemt" : "Dot manuāli"}
+            ${activeRights ? "Noņemt" : "Dot manuāli"}
           </button>
           <button type="button" class="btn btn-outline-danger btn-sm btn-remove-member" data-id="${escapeHtml(m.id)}">Dzēst</button>
         </td>
@@ -1620,7 +1745,7 @@
         [
           formatLatvianDate(dateStr),
           m.name,
-          m.canVote ? "Jā" : "Nē",
+          hasVoteRightsOn(m, dateStr) ? "Jā" : "Nē",
           statusLabel(day[m.id]),
         ]
           .map(csvEscape)
@@ -1645,7 +1770,7 @@
           [
             formatLatvianDate(dateStr),
             m.name,
-            m.canVote ? "Jā" : "Nē",
+            hasVoteRightsOn(m, dateStr) ? "Jā" : "Nē",
             statusLabel(day[m.id]),
           ]
             .map(csvEscape)
@@ -2337,6 +2462,13 @@
     document.querySelectorAll("#main-tabs .nav-link").forEach((btn) => {
       btn.addEventListener("click", () => switchTab(btn.dataset.tab));
     });
+
+    // Login contact email from data.js
+    const contactEl = $("#login-contact-email");
+    if (contactEl && typeof CONTACT_EMAIL === "string" && CONTACT_EMAIL) {
+      contactEl.textContent = CONTACT_EMAIL;
+      contactEl.setAttribute("href", "mailto:" + CONTACT_EMAIL);
+    }
 
     $("#btn-load-date").addEventListener("click", () => {
       openDate($("#date-input").value);
