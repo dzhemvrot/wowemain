@@ -13,7 +13,6 @@ const SEED_USERS = [
   },
 ];
 
-// Contact shown on the login screen (change as needed)
-const CONTACT_EMAIL = "sp@r22vsk.lv";
+const CONTACT_EMAIL = "tbesarabs@gmail.com";
 
 const REMOTE_URL = "https://script.google.com/macros/s/AKfycbwebjahgC1523770gHgCiAVEAS0Jt1Bx6G-d2kbClhuznbt51jv7oUXGWyXP0a433Jo/exec";
