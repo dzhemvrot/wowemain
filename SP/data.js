@@ -15,4 +15,4 @@ const SEED_USERS = [
 
 const CONTACT_EMAIL = "tbesarabs@gmail.com";
 
-const REMOTE_URL = "https://script.google.com/macros/s/AKfycbwebjahgC1523770gHgCiAVEAS0Jt1Bx6G-d2kbClhuznbt51jv7oUXGWyXP0a433Jo/exec";
+const REMOTE_URL = "https://school-api.wmcoeu.workers.dev/sp";
