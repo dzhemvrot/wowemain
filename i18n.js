@@ -165,7 +165,7 @@ const translations = {
     "tools-msaieti": "msaieti — mazie radošie saieti",
     "Thoughtslink": "Domājumi",
     "nav-home": "Sākums",
-    "nav-faq": "BUJ"
+    "nav-faq": "F.A.Q."
   },
 
   ru: {
