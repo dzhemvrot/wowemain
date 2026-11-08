@@ -222,10 +222,12 @@
         <div class="card-header">How to play</div>
         <div class="card-body small">
           <ul class="mb-0">
-            <li>15×15 grid, start with 3 hearts, 0 AP, range 3</li>
-            <li>Actions (spent AP): Move (1), Give 1 AP to someone in range (1), Shoot (1), Upgrade range (2)</li>
+            <li>15×15 grid, start with 3 hearts, <strong>1 AP</strong>, range 3</li>
+            <li>Actions (spend AP): Move (1), Give 1 AP in range (1), Shoot (1), Upgrade range (2)</li>
+            <li>Turns last <strong>5 minutes</strong>. Living players get +1 AP at the start of each turn.</li>
+            <li>If more than ⅔ of living players press <em>Ready</em>, a 10-second countdown starts the next turn early. Host can also force the next turn.</li>
             <li>Hearts, AP, range and who hit whom are <strong>secret</strong>. Only positions and final blows are public.</li>
-            <li>Last player standing (or negotiated standings) wins.</li>
+            <li>Win: last player standing, or all living players choose <em>World peace</em>.</li>
           </ul>
         </div>
       </div>
@@ -236,17 +238,27 @@
       <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
         <div>
           <h4 class="mb-1" id="game-title">Game</h4>
+          <div class="d-flex flex-wrap gap-2 align-items-center mb-1" id="turn-bar">
+            <span class="stat-pill" id="turn-label">Turn –</span>
+            <span class="stat-pill" id="turn-timer">––:––</span>
+            <span class="stat-pill d-none" id="ready-count">Ready 0/0</span>
+            <span class="badge bg-warning text-dark d-none" id="countdown-badge">Next turn in <span id="countdown-sec">10</span>s</span>
+          </div>
           <div class="d-flex flex-wrap gap-2" id="own-stats">
             <span class="stat-pill"><i class="bi bi-heart-fill text-danger"></i> <span id="stat-hearts">–</span></span>
             <span class="stat-pill"><i class="bi bi-lightning-fill text-warning"></i> <span id="stat-ap">–</span> AP</span>
             <span class="stat-pill"><i class="bi bi-bullseye"></i> Range <span id="stat-range">–</span></span>
           </div>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-success btn-sm d-none" id="btn-ready">Ready</button>
+          <button class="btn btn-outline-primary btn-sm d-none" id="btn-world-peace">World peace</button>
           <button class="btn btn-outline-secondary btn-sm" id="btn-leave-game">Leave</button>
           <button class="btn btn-outline-danger btn-sm d-none" id="btn-end-game">End game</button>
         </div>
       </div>
+
+      <div id="game-over-banner" class="alert alert-success d-none mb-3" role="alert"></div>
 
       <div class="row g-3">
         <div class="col-lg-8">
@@ -287,7 +299,7 @@
             <div class="card-header">Host controls</div>
             <div class="card-body d-grid gap-2">
               <button class="btn btn-success btn-sm" id="btn-start-game">Start game</button>
-              <button class="btn btn-outline-secondary btn-sm" id="btn-grant-ap">Grant 1 AP to all alive</button>
+              <button class="btn btn-outline-primary btn-sm d-none" id="btn-next-turn">Force next turn</button>
             </div>
           </div>
         </div>

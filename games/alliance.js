@@ -6,16 +6,19 @@
 const GRID = 15;
 const START_HEARTS = 3;
 const START_RANGE = 3;
-const START_AP = 0;
+const START_AP = 1;
+const TURN_MS = 5 * 60 * 1000; // 5 minutes
+const READY_COUNTDOWN_MS = 10 * 1000;
 
 const state = {
-  user: null,          // { username, token }
+  user: null, // { username, token }
   view: "auth",
   lobbies: [],
-  lobby: null,         // current lobby / game
+  lobby: null,
   selectedAction: null,
   selectedCell: null,
   pollTimer: null,
+  uiTimer: null,
   lastHash: null,
 };
 
@@ -195,12 +198,20 @@ function demoApi(action, payload) {
     });
 
     const gameId = uid();
+    const now = Date.now();
     const game = {
       id: gameId,
       lobbyId: lobby.id,
       players,
-      log: [{ t: Date.now(), type: "system", text: "Game started. Fog of war is active." }],
+      log: [{ t: now, type: "system", text: "Game started. Fog of war is active. Turn 1 begins." }],
       host: lobby.host,
+      turn: 1,
+      turnStartedAt: now,
+      ready: [],
+      worldPeace: [],
+      countdownEndsAt: null,
+      status: "playing",
+      winners: null,
     };
     db.games[gameId] = game;
     lobby.status = "playing";
@@ -211,32 +222,83 @@ function demoApi(action, payload) {
 
   if (action === "getGame") {
     const lobby = db.lobbies[payload.lobbyId];
-    if (!lobby || !lobby.gameId) return { ok: false, error: "No active game" };
+    if (!lobby) return { ok: false, error: "Lobby not found" };
+    if (!lobby.gameId) {
+      return {
+        ok: true,
+        lobby: { id: lobby.id, name: lobby.name, host: lobby.host, status: lobby.status, players: lobby.players },
+        game: null,
+      };
+    }
     const game = db.games[lobby.gameId];
     if (!game) return { ok: false, error: "Game missing" };
-    return { ok: true, game: publicGameView(game, me.username), lobby: { id: lobby.id, name: lobby.name, host: lobby.host, status: lobby.status, players: lobby.players } };
+    tickGame(game);
+    saveDemo(db);
+    return {
+      ok: true,
+      game: publicGameView(game, me.username),
+      lobby: { id: lobby.id, name: lobby.name, host: lobby.host, status: lobby.status, players: lobby.players },
+    };
   }
 
   if (action === "doAction") {
     const lobby = db.lobbies[payload.lobbyId];
     if (!lobby || !lobby.gameId) return { ok: false, error: "No game" };
     const game = db.games[lobby.gameId];
+    tickGame(game);
+    if (game.status === "finished") {
+      saveDemo(db);
+      return { ok: true, game: publicGameView(game, me.username) };
+    }
     const result = applyAction(game, me.username, payload.act, payload.target);
     if (!result.ok) return result;
+    checkEndConditions(game);
     saveDemo(db);
     return { ok: true, game: publicGameView(game, me.username) };
   }
 
-  if (action === "grantAp") {
+  if (action === "setReady") {
+    const lobby = db.lobbies[payload.lobbyId];
+    if (!lobby || !lobby.gameId) return { ok: false, error: "No game" };
+    const game = db.games[lobby.gameId];
+    tickGame(game);
+    if (game.status === "finished") return { ok: true, game: publicGameView(game, me.username) };
+    const p = game.players[me.username];
+    if (!p || !p.alive) return { ok: false, error: "Only living players can ready" };
+    const on = !!payload.ready;
+    game.ready = game.ready || [];
+    if (on && !game.ready.includes(me.username)) game.ready.push(me.username);
+    if (!on) game.ready = game.ready.filter((n) => n !== me.username);
+    maybeStartReadyCountdown(game);
+    tickGame(game);
+    saveDemo(db);
+    return { ok: true, game: publicGameView(game, me.username) };
+  }
+
+  if (action === "setWorldPeace") {
+    const lobby = db.lobbies[payload.lobbyId];
+    if (!lobby || !lobby.gameId) return { ok: false, error: "No game" };
+    const game = db.games[lobby.gameId];
+    tickGame(game);
+    if (game.status === "finished") return { ok: true, game: publicGameView(game, me.username) };
+    const p = game.players[me.username];
+    if (!p || !p.alive) return { ok: false, error: "Only living players can vote" };
+    const on = !!payload.worldPeace;
+    game.worldPeace = game.worldPeace || [];
+    if (on && !game.worldPeace.includes(me.username)) game.worldPeace.push(me.username);
+    if (!on) game.worldPeace = game.worldPeace.filter((n) => n !== me.username);
+    checkEndConditions(game);
+    saveDemo(db);
+    return { ok: true, game: publicGameView(game, me.username) };
+  }
+
+  if (action === "nextTurn") {
     const lobby = db.lobbies[payload.lobbyId];
     if (!lobby || lobby.host !== me.username) return { ok: false, error: "Host only" };
     const game = db.games[lobby.gameId];
     if (!game) return { ok: false, error: "No game" };
-    Object.values(game.players).forEach((p) => {
-      if (p.alive) p.ap += 1;
-    });
-    game.log.push({ t: Date.now(), type: "system", text: "Host granted 1 AP to all living players." });
-    if (game.log.length > 100) game.log = game.log.slice(-80);
+    if (game.status === "finished") return { ok: true, game: publicGameView(game, me.username) };
+    advanceTurn(game, "Host forced the next turn.");
     saveDemo(db);
     return { ok: true, game: publicGameView(game, me.username) };
   }
@@ -245,11 +307,98 @@ function demoApi(action, payload) {
     const lobby = db.lobbies[payload.lobbyId];
     if (!lobby || lobby.host !== me.username) return { ok: false, error: "Host only" };
     lobby.status = "finished";
+    const game = lobby.gameId ? db.games[lobby.gameId] : null;
+    if (game && game.status !== "finished") {
+      game.status = "finished";
+      game.log.push({ t: Date.now(), type: "system", text: "Host ended the game." });
+    }
     saveDemo(db);
     return { ok: true };
   }
 
   return { ok: false, error: "Unknown action" };
+}
+
+function livingNames(game) {
+  return Object.keys(game.players).filter((n) => game.players[n].alive);
+}
+
+function advanceTurn(game, reason) {
+  if (game.status === "finished") return;
+  Object.values(game.players).forEach((p) => {
+    if (p.alive) p.ap += 1;
+  });
+  game.turn = (game.turn || 1) + 1;
+  game.turnStartedAt = Date.now();
+  game.ready = [];
+  game.countdownEndsAt = null;
+  game.log.push({
+    t: Date.now(),
+    type: "system",
+    text: reason || `Turn ${game.turn} begins. Living players received 1 AP.`,
+  });
+  if (game.log.length > 100) game.log = game.log.slice(-80);
+}
+
+function maybeStartReadyCountdown(game) {
+  const living = livingNames(game);
+  if (living.length === 0) return;
+  const need = Math.floor((living.length * 2) / 3) + 1; // strictly more than 2/3
+  const readyCount = (game.ready || []).filter((n) => living.includes(n)).length;
+  if (readyCount >= need && !game.countdownEndsAt) {
+    game.countdownEndsAt = Date.now() + READY_COUNTDOWN_MS;
+    game.log.push({
+      t: Date.now(),
+      type: "system",
+      text: `More than ⅔ ready (${readyCount}/${living.length}). Next turn in 10 seconds.`,
+    });
+  }
+  if (readyCount < need) game.countdownEndsAt = null;
+}
+
+function tickGame(game) {
+  if (!game || game.status === "finished") return;
+  const now = Date.now();
+  // Ready countdown finished
+  if (game.countdownEndsAt && now >= game.countdownEndsAt) {
+    advanceTurn(game, `Turn ${((game.turn || 1) + 1)} begins (ready vote). Living players received 1 AP.`);
+  }
+  // 5-minute turn timer
+  if (game.turnStartedAt && now - game.turnStartedAt >= TURN_MS) {
+    advanceTurn(game, `Turn ${((game.turn || 1) + 1)} begins (timer). Living players received 1 AP.`);
+  }
+  checkEndConditions(game);
+}
+
+function checkEndConditions(game) {
+  if (!game || game.status === "finished") return;
+  const living = livingNames(game);
+  if (living.length === 1) {
+    game.status = "finished";
+    game.winners = living;
+    game.log.push({
+      t: Date.now(),
+      type: "system",
+      text: `${living[0]} is the last player standing and wins!`,
+    });
+    return;
+  }
+  if (living.length === 0) {
+    game.status = "finished";
+    game.winners = [];
+    game.log.push({ t: Date.now(), type: "system", text: "No one remains. Draw." });
+    return;
+  }
+  const peace = (game.worldPeace || []).filter((n) => living.includes(n));
+  if (peace.length === living.length && living.length > 0) {
+    game.status = "finished";
+    game.winners = living.slice();
+    game.log.push({
+      t: Date.now(),
+      type: "system",
+      text: `World peace declared. Victors: ${living.join(", ")}.`,
+    });
+  }
 }
 
 function placePlayers(names) {
@@ -275,12 +424,21 @@ function publicGameView(game, viewer) {
     alive[name] = p.alive;
   });
   const me = game.players[viewer];
+  const living = Object.keys(game.players).filter((n) => game.players[n].alive);
   return {
     id: game.id,
     positions,
     alive,
     log: game.log || [],
     host: game.host,
+    turn: game.turn || 1,
+    turnStartedAt: game.turnStartedAt || null,
+    ready: game.ready || [],
+    worldPeace: game.worldPeace || [],
+    countdownEndsAt: game.countdownEndsAt || null,
+    status: game.status || "playing",
+    winners: game.winners || null,
+    livingCount: living.length,
     you: me
       ? { hearts: me.hearts, ap: me.ap, range: me.range, alive: me.alive, x: me.x, y: me.y }
       : null,
@@ -342,8 +500,6 @@ function applyAction(game, actorName, act, target) {
     if (victim.hearts <= 0) {
       victim.hearts = 0;
       victim.alive = false;
-      // transfer remaining AP to killer (classic rule variant)
-      actor.ap += victim.ap;
       victim.ap = 0;
       game.log.push({
         t: Date.now(),
@@ -351,8 +507,10 @@ function applyAction(game, actorName, act, target) {
         text: `${actorName} dealt the final blow to ${targetName}.`,
       });
       if (game.log.length > 100) game.log = game.log.slice(-80);
+      // remove from ready / world peace
+      game.ready = (game.ready || []).filter((n) => n !== targetName);
+      game.worldPeace = (game.worldPeace || []).filter((n) => n !== targetName);
     }
-    // hit itself is secret unless it was the final blow
     return { ok: true };
   }
 
@@ -472,11 +630,14 @@ async function enterLobby(lobby) {
   showView("game");
   $("#game-title").textContent = lobby.name;
   const isHost = lobby.host === state.user.username;
-  $("#host-panel").classList.toggle("d-none", !isHost || lobby.status === "playing");
+  $("#host-panel").classList.toggle("d-none", !isHost);
   $("#btn-end-game").classList.toggle("d-none", !isHost);
   $("#btn-start-game").classList.toggle("d-none", lobby.status === "playing");
+  $("#btn-next-turn").classList.toggle("d-none", lobby.status !== "playing");
+  $("#game-over-banner").classList.add("d-none");
   await refreshGame();
   startPolling();
+  startUiTimer();
 }
 
 async function leaveGame() {
@@ -487,6 +648,7 @@ async function leaveGame() {
   }
   state.lobby = null;
   stopPolling();
+  stopUiTimer();
   showView("lobbies");
   refreshLobbies();
 }
@@ -546,13 +708,19 @@ function renderPlayers(game) {
   const list = $("#player-list");
   const names = game.playerNames || Object.keys(game.positions || {});
   $("#player-count").textContent = names.length;
+  const readySet = new Set(game.ready || []);
+  const peaceSet = new Set(game.worldPeace || []);
   list.innerHTML = names
     .map((n) => {
       const alive = game.alive?.[n] !== false;
       const isMe = n === state.user.username;
       const isHost = n === game.host;
+      const badges = [];
+      if (isHost) badges.push('<span class="badge bg-secondary">host</span>');
+      if (alive && readySet.has(n)) badges.push('<span class="badge bg-success">ready</span>');
+      if (alive && peaceSet.has(n)) badges.push('<span class="badge bg-primary">peace</span>');
       return `<li class="list-group-item d-flex justify-content-between align-items-center py-2">
-        <span>${escapeHtml(n)}${isMe ? " <em>(you)</em>" : ""}${isHost ? ' <span class="badge bg-secondary">host</span>' : ""}</span>
+        <span>${escapeHtml(n)}${isMe ? " <em>(you)</em>" : ""} ${badges.join(" ")}</span>
         <span class="badge ${alive ? "bg-success" : "bg-secondary"}">${alive ? "Alive" : "Out"}</span>
       </li>`;
     })
@@ -587,7 +755,8 @@ function renderOwnStats(game) {
 }
 
 function updateActionButtons(you) {
-  const alive = you && you.alive;
+  const finished = state.lobby?._game?.status === "finished";
+  const alive = you && you.alive && !finished;
   $$("#action-bar [data-action]").forEach((btn) => {
     const act = btn.dataset.action;
     let can = alive;
@@ -645,11 +814,16 @@ async function refreshGame() {
       state.lobby = { ...state.lobby, ...data.lobby };
       const isHost = state.lobby.host === state.user.username;
       $("#host-panel").classList.toggle("d-none", !isHost);
-      $("#btn-start-game").classList.toggle("d-none", state.lobby.status === "playing");
+      $("#btn-end-game").classList.toggle("d-none", !isHost);
+      $("#btn-start-game").classList.toggle("d-none", !isHost || state.lobby.status === "playing");
+      $("#btn-next-turn").classList.toggle(
+        "d-none",
+        !isHost || state.lobby.status !== "playing"
+      );
     }
     if (data.game) applyGameData(data.game);
+    else if (state.lobby.status === "waiting") renderWaitingLobby();
   } catch (e) {
-    // still in lobby waiting for start
     if (state.lobby.status === "waiting") {
       renderWaitingLobby();
     } else {
@@ -664,6 +838,84 @@ function applyGameData(game) {
   renderPlayers(game);
   renderLog(game);
   renderOwnStats(game);
+  renderTurnUI(game);
+  renderMetaButtons(game);
+}
+
+function renderTurnUI(game) {
+  if (!game || game.status === "finished") {
+    $("#turn-label").textContent = "Game over";
+    $("#turn-timer").textContent = "––:––";
+    $("#ready-count").classList.add("d-none");
+    $("#countdown-badge").classList.add("d-none");
+    return;
+  }
+  $("#turn-label").textContent = `Turn ${game.turn || 1}`;
+  const living = game.livingCount || 0;
+  const readyN = (game.ready || []).length;
+  const need = living > 0 ? Math.floor((living * 2) / 3) + 1 : 0;
+  $("#ready-count").classList.remove("d-none");
+  $("#ready-count").textContent = `Ready ${readyN}/${living} (need ${need})`;
+  updateTimersDisplay(game);
+}
+
+function updateTimersDisplay(game) {
+  if (!game || game.status === "finished") return;
+  const now = Date.now();
+  if (game.countdownEndsAt && game.countdownEndsAt > now) {
+    const sec = Math.max(0, Math.ceil((game.countdownEndsAt - now) / 1000));
+    $("#countdown-badge").classList.remove("d-none");
+    $("#countdown-sec").textContent = String(sec);
+  } else {
+    $("#countdown-badge").classList.add("d-none");
+  }
+  if (game.turnStartedAt) {
+    const left = Math.max(0, TURN_MS - (now - game.turnStartedAt));
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    $("#turn-timer").textContent = `${m}:${String(s).padStart(2, "0")}`;
+  } else {
+    $("#turn-timer").textContent = "5:00";
+  }
+}
+
+function renderMetaButtons(game) {
+  const you = game?.you;
+  const finished = game?.status === "finished";
+  const alive = you && you.alive && !finished;
+
+  $("#btn-ready").classList.toggle("d-none", !alive);
+  $("#btn-world-peace").classList.toggle("d-none", !alive);
+
+  if (alive) {
+    const isReady = (game.ready || []).includes(state.user.username);
+    $("#btn-ready").classList.toggle("btn-success", isReady);
+    $("#btn-ready").classList.toggle("btn-outline-success", !isReady);
+    $("#btn-ready").textContent = isReady ? "Ready ✓" : "Ready";
+
+    const isPeace = (game.worldPeace || []).includes(state.user.username);
+    $("#btn-world-peace").classList.toggle("btn-primary", isPeace);
+    $("#btn-world-peace").classList.toggle("btn-outline-primary", !isPeace);
+    $("#btn-world-peace").textContent = isPeace ? "World peace ✓" : "World peace";
+  }
+
+  const isHost = game?.host === state.user.username;
+  $("#btn-next-turn").classList.toggle("d-none", !isHost || finished || state.lobby?.status !== "playing");
+  $("#btn-start-game").classList.toggle("d-none", !isHost || state.lobby?.status === "playing");
+
+  const banner = $("#game-over-banner");
+  if (finished) {
+    banner.classList.remove("d-none");
+    if (game.winners && game.winners.length === 1) {
+      banner.textContent = `${game.winners[0]} wins — last player standing!`;
+    } else if (game.winners && game.winners.length > 1) {
+      banner.textContent = `World peace! Victors: ${game.winners.join(", ")}`;
+    } else {
+      banner.textContent = "Game over.";
+    }
+  } else {
+    banner.classList.add("d-none");
+  }
 }
 
 function renderWaitingLobby() {
@@ -680,6 +932,14 @@ function renderWaitingLobby() {
   $("#stat-hearts").textContent = "–";
   $("#stat-ap").textContent = "–";
   $("#stat-range").textContent = "–";
+  $("#turn-label").textContent = "Waiting";
+  $("#turn-timer").textContent = "––:––";
+  $("#ready-count").classList.add("d-none");
+  $("#countdown-badge").classList.add("d-none");
+  $("#btn-ready").classList.add("d-none");
+  $("#btn-world-peace").classList.add("d-none");
+  $("#btn-next-turn").classList.add("d-none");
+  $("#game-over-banner").classList.add("d-none");
   $$("#action-bar [data-action]").forEach((b) => (b.disabled = true));
 }
 
@@ -694,6 +954,21 @@ function stopPolling() {
   if (state.pollTimer) {
     clearInterval(state.pollTimer);
     state.pollTimer = null;
+  }
+}
+
+function startUiTimer() {
+  stopUiTimer();
+  state.uiTimer = setInterval(() => {
+    const g = state.lobby?._game;
+    if (g) updateTimersDisplay(g);
+  }, 500);
+}
+
+function stopUiTimer() {
+  if (state.uiTimer) {
+    clearInterval(state.uiTimer);
+    state.uiTimer = null;
   }
 }
 
@@ -732,9 +1007,10 @@ function bindEvents() {
     showSpinner(true);
     try {
       const data = await api("startGame", { lobbyId: state.lobby.id });
-      applyGameData(data.game);
       state.lobby.status = "playing";
+      applyGameData(data.game);
       $("#btn-start-game").classList.add("d-none");
+      $("#btn-next-turn").classList.remove("d-none");
       $("#host-panel").classList.remove("d-none");
     } catch (e) {
       alert(e.message);
@@ -742,10 +1018,41 @@ function bindEvents() {
       showSpinner(false);
     }
   });
-  $("#btn-grant-ap").addEventListener("click", async () => {
+  $("#btn-next-turn").addEventListener("click", async () => {
     showSpinner(true);
     try {
-      const data = await api("grantAp", { lobbyId: state.lobby.id });
+      const data = await api("nextTurn", { lobbyId: state.lobby.id });
+      applyGameData(data.game);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      showSpinner(false);
+    }
+  });
+  $("#btn-ready").addEventListener("click", async () => {
+    const g = state.lobby?._game;
+    if (!g) return;
+    const currently = (g.ready || []).includes(state.user.username);
+    showSpinner(true);
+    try {
+      const data = await api("setReady", { lobbyId: state.lobby.id, ready: !currently });
+      applyGameData(data.game);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      showSpinner(false);
+    }
+  });
+  $("#btn-world-peace").addEventListener("click", async () => {
+    const g = state.lobby?._game;
+    if (!g) return;
+    const currently = (g.worldPeace || []).includes(state.user.username);
+    showSpinner(true);
+    try {
+      const data = await api("setWorldPeace", {
+        lobbyId: state.lobby.id,
+        worldPeace: !currently,
+      });
       applyGameData(data.game);
     } catch (e) {
       alert(e.message);
