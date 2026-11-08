@@ -6,4 +6,4 @@ const SEED_USERS = [];
 
 const CONTACT_EMAIL = "tbesarabs@gmail.com";
 
-const REMOTE_URL = "https://school-api.wmcoeu.workers.dev/sp";
+const REMOTE_URL = "https://school-api.wmcoeu.workers.dev/sp/public";
