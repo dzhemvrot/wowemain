@@ -35,46 +35,24 @@
     );
   }
 
+  function apiUrl(path) {
+    return REMOTE_URL.trim().replace(/\/+$/, "") + path;
+  }
+
   async function fetchRemote() {
-    const res = await fetch(REMOTE_URL.trim(), {
-      method: "GET",
-      cache: "no-store",
-    });
+    const res = await fetch(apiUrl("/public"), { method: "GET", cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     return res.json();
   }
 
   async function postCheckIn(dateStr, memberId) {
-    // Fetch latest, merge one status, post with merge flag
-    const latest = await fetchRemote();
-    const attendance = latest.attendance && typeof latest.attendance === "object"
-      ? latest.attendance
-      : {};
-    if (!attendance[dateStr]) attendance[dateStr] = {};
-    attendance[dateStr][memberId] = "present";
-
-    const res = await fetch(REMOTE_URL.trim(), {
+    const res = await fetch(apiUrl("/checkin"), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        attendance: { [dateStr]: { [memberId]: "present" } },
-        _mergeAttendance: true,
-        // also append a log line without wiping logs: send full logs if we have them
-        logs: [
-          ...(Array.isArray(latest.logs) ? latest.logs : []),
-          {
-            ts: new Date().toISOString(),
-            username: "publisks",
-            action: "public_checkin",
-            details: memberId + " · " + dateStr,
-          },
-        ],
-      }),
-      redirect: "follow",
+      body: JSON.stringify({ memberId }),
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
     const json = await res.json().catch(() => ({}));
-    if (json && json.ok === false) throw new Error(json.error || "save failed");
+    if (!res.ok || json.ok === false) throw new Error(json.error || "save failed");
     return json;
   }
 

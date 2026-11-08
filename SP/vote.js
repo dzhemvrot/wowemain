@@ -21,21 +21,14 @@
     );
   }
 
-  async function fetchRemote() {
-    const res = await fetch(REMOTE_URL.trim(), { method: "GET", cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return res.json();
+  function apiUrl(path) {
+    return REMOTE_URL.trim().replace(/\/+$/, "") + path;
   }
 
-  async function fetchClientIp() {
-    try {
-      const res = await fetch("https://api.ipify.org?format=json", { cache: "no-store" });
-      if (!res.ok) return null;
-      const j = await res.json();
-      return j.ip || null;
-    } catch {
-      return null;
-    }
+  async function fetchRemote() {
+    const res = await fetch(apiUrl("/public"), { method: "GET", cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
   }
 
   function memberName(id) {
@@ -171,7 +164,9 @@
     $("#ballot-name").textContent = memberName(memberId);
     $("#ballot-current").textContent =
       b && b.choice
-        ? "Pašreizējā balss: " + (CHOICE_LV[b.choice] || b.choice)
+        ? b.choice === "voted"
+          ? "Jau nobalsots (slēgta balsošana). Vari mainīt balsi."
+          : "Pašreizējā balss: " + (CHOICE_LV[b.choice] || b.choice)
         : "Vēl nav nobalsots.";
     $("#ballot-error").classList.add("d-none");
     $("#btn-confirm-vote").disabled = true;
@@ -212,57 +207,24 @@
     if (!selectedMemberId || !pendingChoice) return;
     $("#btn-confirm-vote").disabled = true;
     try {
-      const fresh = await fetchRemote();
-      const vote = fresh.activeVote;
-      if (!vote || !vote.open) {
-        show("state-closed");
-        return;
-      }
-      if ((vote.eligible || []).indexOf(selectedMemberId) < 0) {
-        err.textContent = "Tu neesi tiesīgo sarakstā.";
-        err.classList.remove("d-none");
-        return;
-      }
-      const ip = await fetchClientIp();
-      const ts = new Date().toISOString();
-      const logs = Array.isArray(fresh.logs) ? fresh.logs.slice() : [];
-      logs.push({
-        ts,
-        username: "publisks",
-        action: "cast_vote",
-        details:
-          memberName(selectedMemberId) +
-          " · " +
-          (CHOICE_LV[pendingChoice] || pendingChoice) +
-          (ip ? " · IP: " + ip : ""),
-      });
-
-      const res = await fetch(REMOTE_URL.trim(), {
+      const res = await fetch(apiUrl("/vote"), {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({
-          _voteBallot: {
-            voteId: vote.id,
-            memberId: selectedMemberId,
-            choice: pendingChoice,
-            ts,
-          },
-          logs,
+          voteId: dataCache.activeVote.id,
+          memberId: selectedMemberId,
+          choice: pendingChoice,
         }),
-        redirect: "follow",
       });
-      if (!res.ok) throw new Error("HTTP " + res.status);
       const json = await res.json().catch(() => ({}));
-      if (json && json.ok === false) throw new Error(json.error || "fail");
+      if (!res.ok || json.ok === false) throw new Error(json.error || "fail");
 
       $("#done-text").textContent =
-        memberName(selectedMemberId) +
-        ": " +
-        (CHOICE_LV[pendingChoice] || pendingChoice);
+        memberName(selectedMemberId) + ": " + (CHOICE_LV[pendingChoice] || pendingChoice);
       show("state-done");
     } catch (e) {
       console.warn(e);
-      err.textContent = "Neizdevās nosūtīt. Mēģini vēlreiz.";
+      err.textContent = e.message || "Neizdevās nosūtīt. Mēģini vēlreiz.";
       err.classList.remove("d-none");
       $("#btn-confirm-vote").disabled = false;
     }

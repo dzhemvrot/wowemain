@@ -48,6 +48,29 @@
   const $ = (sel) => document.querySelector(sel);
 
   let adminSetPassTargetId = null;
+  
+  let pendingLogs = [];
+
+  function apiUrl(path) {
+    return REMOTE_URL.trim().replace(/\/+$/, "") + path;
+  }
+
+  async function api(path, body) {
+    const res = await fetch(apiUrl(path), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ ...(body || {}), token: currentUser ? currentUser.token : null }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      currentUser = null;
+      saveSession(null);
+      showLogin();
+      throw new Error("Sesija beigusies — ienāc vēlreiz.");
+    }
+    if (!json || json.ok === false) throw new Error((json && json.error) || "HTTP " + res.status);
+    return json;
+  }
 
   // ---------- Password hashing (SHA-256 + salt) ----------
   function randomSalt() {
@@ -186,44 +209,35 @@
     const username = ($("#username-input").value || "").trim();
     const password = $("#password-input").value || "";
     const err = $("#login-error");
-
     remoteEnabled = hasRemote();
+    let res;
     try {
-      if (remoteEnabled) {
-        applyPayload(await fetchRemote());
-        saveLocal();
-      } else {
-        applyPayload(loadLocal());
-      }
+      const r = await fetch(apiUrl("/login"), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ username, password }),
+      });
+      res = await r.json();
     } catch {
-      applyPayload(loadLocal());
-    }
-    ensureSeedUsers();
-
-    const user = usersCache.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase()
-    );
-    if (!user || !(await verifyUserPassword(user, password))) {
+      err.textContent = "Neizdevās savienoties ar serveri.";
       err.classList.remove("d-none");
       return;
     }
-    // Migrate legacy plaintext → hash on successful login
-    if (user.password != null && !user.passwordHash) {
-      await setUserPasswordFields(user, password);
-      scheduleSave();
+    if (!res || !res.ok) {
+      err.textContent = (res && res.error) || "Nepareizs lietotājvārds vai parole.";
+      err.classList.remove("d-none");
+      return;
     }
     err.classList.add("d-none");
     currentUser = {
-      id: user.id,
-      username: user.username,
-      isAdmin: !!user.isAdmin,
+      id: res.user.id,
+      username: res.user.username,
+      isAdmin: !!res.user.isAdmin,
+      token: res.token,
     };
     saveSession(currentUser);
     $("#username-input").value = "";
     $("#password-input").value = "";
-    const ip = await fetchClientIp();
-    addLog("login", ip ? "IP: " + ip : "IP: nezināma");
-    scheduleSave();
     showApp();
   }
 
@@ -250,8 +264,7 @@
   }
 
   function logout() {
-    addLog("logout", "");
-    scheduleSave();
+    api("/logout", {}).catch(() => {});
     currentUser = null;
     saveSession(null);
     adminSetPassTargetId = null;
@@ -316,16 +329,12 @@
   }
 
   // ---------- Payload ----------
-  function payload() {
-    return {
-      members: membersCache,
-      attendance: attendanceCache,
-      users: usersCache,
-      logs: logsCache.slice(-MAX_LOGS),
-      publicSession: publicSessionCache,
-      activeVote: activeVoteCache,
-      voteArchive: voteArchiveCache.slice(-200),
-    };
+  function logout() {
+    api("/logout", {}).catch(() => {});
+    currentUser = null;
+    saveSession(null);
+    adminSetPassTargetId = null;
+    showLogin();
   }
 
   function emptyPublicSession() {
@@ -681,12 +690,7 @@
   }
 
   async function fetchRemote() {
-    const res = await fetch(REMOTE_URL.trim(), {
-      method: "GET",
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const json = await res.json();
+    const json = await api("/data", {});
     return {
       members: json.members || [],
       attendance: json.attendance || {},
@@ -699,16 +703,17 @@
   }
 
   async function pushRemote() {
-    const res = await fetch(REMOTE_URL.trim(), {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload()),
-      redirect: "follow",
-    });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const json = await res.json().catch(() => ({}));
-    if (json && json.ok === false) throw new Error(json.error || "save failed");
-    return json;
+    const sending = pendingLogs;
+    pendingLogs = [];
+    const body = payload();
+    delete body.logs;
+    body.newLogs = sending;
+    try {
+      return await api("/save", body);
+    } catch (e) {
+      pendingLogs = sending.concat(pendingLogs);
+      throw e;
+    }
   }
 
   async function loadFromRemoteOrLocal() {
@@ -763,15 +768,15 @@
 
   // ---------- Logging ----------
   function addLog(action, details) {
-    logsCache.push({
+    const entry = {
       ts: new Date().toISOString(),
       username: currentUser ? currentUser.username : "?",
       action,
       details: details || "",
-    });
-    if (logsCache.length > MAX_LOGS) {
-      logsCache = logsCache.slice(-MAX_LOGS);
-    }
+    };
+    logsCache.push(entry);
+    pendingLogs.push(entry);
+    if (logsCache.length > MAX_LOGS) logsCache = logsCache.slice(-MAX_LOGS);
   }
 
   function formatLogTime(iso) {
@@ -869,26 +874,15 @@
       alert("Parolei jābūt vismaz " + MIN_PASSWORD_LEN + " simboliem.");
       return false;
     }
-    // Only main admin can create other admins
-    if (isAdmin && !isMainAdmin(currentUser)) {
-      alert("Tikai galvenais admin var izveidot administratorus.");
+    try {
+      const r = await api("/users/add", { username: name, password: pass, isAdmin: !!isAdmin });
+      usersCache = r.users || usersCache;
+      renderUsersList();
+      return true;
+    } catch (e) {
+      alert(e.message);
       return false;
     }
-    if (usersCache.some((u) => u.username.toLowerCase() === name.toLowerCase())) {
-      alert("Šāds lietotājvārds jau eksistē.");
-      return false;
-    }
-    const user = {
-      id: newId("u"),
-      username: name,
-      isAdmin: !!isAdmin,
-    };
-    await setUserPasswordFields(user, pass);
-    usersCache.push(user);
-    addLog("add_user", name + (isAdmin ? " (admin)" : ""));
-    scheduleSave();
-    renderUsersList();
-    return true;
   }
 
   function showAdminSetPass(userId) {
@@ -914,22 +908,21 @@
     const err = $("#admin-set-pass-error");
     err.classList.add("d-none");
     const u = usersCache.find((x) => x.id === adminSetPassTargetId);
-    if (!u || !canSetPasswordFor(u)) {
-      err.textContent = "Nav tiesību.";
-      err.classList.remove("d-none");
-      return;
-    }
+    if (!u) return;
     const pass = $("#admin-set-pass-input").value || "";
     if (pass.length < MIN_PASSWORD_LEN) {
       err.textContent = "Parolei jābūt vismaz " + MIN_PASSWORD_LEN + " simboliem.";
       err.classList.remove("d-none");
       return;
     }
-    await setUserPasswordFields(u, pass);
-    addLog("admin_set_password", u.username);
-    scheduleSave();
-    hideAdminSetPass();
-    alert("Parole lietotājam «" + u.username + "» nomainīta.");
+    try {
+      await api("/users/password", { id: u.id, password: pass });
+      hideAdminSetPass();
+      alert("Parole lietotājam «" + u.username + "» nomainīta.");
+    } catch (e) {
+      err.textContent = e.message;
+      err.classList.remove("d-none");
+    }
   }
 
   async function changeOwnPassword() {
@@ -940,17 +933,6 @@
     const current = $("#own-pass-current").value || "";
     const neu = $("#own-pass-new").value || "";
     const conf = $("#own-pass-confirm").value || "";
-    const user = usersCache.find((x) => x.id === currentUser.id);
-    if (!user) {
-      err.textContent = "Lietotājs nav atrasts.";
-      err.classList.remove("d-none");
-      return;
-    }
-    if (!(await verifyUserPassword(user, current))) {
-      err.textContent = "Pašreizējā parole nav pareiza.";
-      err.classList.remove("d-none");
-      return;
-    }
     if (neu.length < MIN_PASSWORD_LEN) {
       err.textContent = "Jaunajai parolei jābūt vismaz " + MIN_PASSWORD_LEN + " simboliem.";
       err.classList.remove("d-none");
@@ -961,35 +943,29 @@
       err.classList.remove("d-none");
       return;
     }
-    await setUserPasswordFields(user, neu);
-    addLog("change_password", currentUser.username);
-    scheduleSave();
-    $("#own-pass-current").value = "";
-    $("#own-pass-new").value = "";
-    $("#own-pass-confirm").value = "";
-    ok.classList.remove("d-none");
+    try {
+      await api("/password", { current, newPassword: neu });
+      $("#own-pass-current").value = "";
+      $("#own-pass-new").value = "";
+      $("#own-pass-confirm").value = "";
+      ok.classList.remove("d-none");
+    } catch (e) {
+      err.textContent = e.message;
+      err.classList.remove("d-none");
+    }
   }
 
-  function removeUser(id) {
+  async function removeUser(id) {
     const u = usersCache.find((x) => x.id === id);
     if (!u) return;
-    if (isMainAdmin(u)) {
-      alert("Galveno admin kontu («admin») nevar dzēst.");
-      return;
-    }
-    if (u.id === currentUser.id) {
-      alert("Nevar dzēst pašreizējo kontu.");
-      return;
-    }
-    if (u.isAdmin && usersCache.filter((x) => x.isAdmin).length <= 1) {
-      alert("Nevar dzēst pēdējo administratoru.");
-      return;
-    }
     if (!confirm("Dzēst lietotāju «" + u.username + "»?")) return;
-    usersCache = usersCache.filter((x) => x.id !== id);
-    addLog("remove_user", u.username);
-    scheduleSave();
-    renderUsersList();
+    try {
+      const r = await api("/users/delete", { id });
+      usersCache = r.users || usersCache;
+      renderUsersList();
+    } catch (e) {
+      alert(e.message);
+    }
   }
 
   // ---------- Members ----------

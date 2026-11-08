@@ -2,16 +2,7 @@ const SEED_MEMBERS = [
   { id: "m01", name: "Something wrong with the database. Contact admin now.", canVote: true },
 ];
 
-const SEED_USERS = [
-  {
-    id: "u_admin",
-    username: "admin",
-    salt: "sp-seed-admin-v1",
-    passwordHash:
-      "98b7286f7f5c44ee1510c021d1f2931c0ed61b1a51381be3280faea6915aa6e4",
-    isAdmin: true,
-  },
-];
+const SEED_USERS = [];
 
 const CONTACT_EMAIL = "tbesarabs@gmail.com";
 
