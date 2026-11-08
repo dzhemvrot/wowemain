@@ -43,7 +43,7 @@
     export_absence_csv: "Eksportēja apmeklējuma riska CSV",
   };
 
-  const MIN_PASSWORD_LEN = 6;
+  const MIN_PASSWORD_LEN = 8;
 
   const $ = (sel) => document.querySelector(sel);
 
@@ -329,12 +329,15 @@
   }
 
   // ---------- Payload ----------
-  function logout() {
-    api("/logout", {}).catch(() => {});
-    currentUser = null;
-    saveSession(null);
-    adminSetPassTargetId = null;
-    showLogin();
+  function payload() {
+    return {
+      members: membersCache,
+      attendance: attendanceCache,
+      logs: logsCache.slice(-MAX_LOGS),
+      publicSession: publicSessionCache,
+      activeVote: activeVoteCache,
+      voteArchive: voteArchiveCache.slice(-200),
+    };
   }
 
   function emptyPublicSession() {
