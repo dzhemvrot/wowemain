@@ -77,6 +77,13 @@
     .cell.in-range {
       box-shadow: inset 0 0 0 2px rgba(253, 126, 20, 0.7);
     }
+    .cell.own-range {
+      box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.45);
+      background: rgba(13, 110, 253, 0.06);
+    }
+    .cell.own-range.enemy {
+      background: rgba(220, 53, 69, 0.28);
+    }
     .cell.adjacent {
       background: rgba(25, 135, 84, 0.22);
     }
@@ -226,7 +233,8 @@
             <li>Actions (spend AP): Move (1), Give 1 AP in range (1), Shoot (1), Upgrade range (2)</li>
             <li>Turns last <strong>5 minutes</strong>. Living players get +1 AP at the start of each turn.</li>
             <li>If more than ⅔ of living players press <em>Ready</em>, a 10-second countdown starts the next turn early. Host can also force the next turn.</li>
-            <li>Hearts, AP, range and who hit whom are <strong>secret</strong>. Only positions and final blows are public.</li>
+            <li>Hearts, AP, range and who hit whom are <strong>secret</strong>. You can see your own range on the board; others cannot see yours. Only positions and final blows are public.</li>
+            <li>Public chat is open; DMs are end-to-end encrypted on your device.</li>
             <li>Win: last player standing, or all living players choose <em>World peace</em>.</li>
           </ul>
         </div>
@@ -293,6 +301,28 @@
             <div class="card-header">Public log</div>
             <div class="card-body p-2">
               <div class="log-box" id="public-log"></div>
+            </div>
+          </div>
+          <div class="card mb-3" id="chat-panel">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span>Chat</span>
+              <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary active" id="chat-tab-public">Public</button>
+                <button type="button" class="btn btn-outline-secondary" id="chat-tab-dm">DM</button>
+              </div>
+            </div>
+            <div class="card-body p-2">
+              <div class="mb-2 d-none" id="dm-target-row">
+                <select class="form-select form-select-sm" id="dm-target">
+                  <option value="">Select player…</option>
+                </select>
+              </div>
+              <div class="log-box mb-2" id="chat-box"></div>
+              <div class="input-group input-group-sm">
+                <input type="text" class="form-control" id="chat-input" maxlength="200" placeholder="Message…" disabled>
+                <button class="btn btn-primary" type="button" id="btn-chat-send" disabled>Send</button>
+              </div>
+              <div class="form-text small" id="chat-hint">Public messages are visible to everyone. DMs are end-to-end encrypted.</div>
             </div>
           </div>
           <div class="card d-none" id="host-panel">

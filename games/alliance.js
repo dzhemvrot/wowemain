@@ -1,8 +1,3 @@
-/**
- * Alliance (Tank Turn Tactics) — client
- * Fog of war: only positions + final blows are public. Hearts / AP / range / hits stay private.
- */
-
 const GRID = 15;
 const START_HEARTS = 3;
 const START_RANGE = 3;
@@ -20,7 +15,141 @@ const state = {
   pollTimer: null,
   uiTimer: null,
   lastHash: null,
+  chatMode: "public",
+  dmTarget: "",
+  keyPair: null,
+  publicKeys: {},
 };
+
+// ---------- E2E crypto (RSA-OAEP + AES-GCM hybrid) ----------
+const KEY_STORAGE = "alliance_e2e_v1";
+
+async function ensureKeyPair() {
+  if (state.keyPair) return state.keyPair;
+  const raw = localStorage.getItem(KEY_STORAGE);
+  if (raw) {
+    try {
+      const jwk = JSON.parse(raw);
+      const privateKey = await crypto.subtle.importKey(
+        "jwk",
+        jwk.privateKey,
+        { name: "RSA-OAEP", hash: "SHA-256" },
+        true,
+        ["decrypt"]
+      );
+      const publicKey = await crypto.subtle.importKey(
+        "jwk",
+        jwk.publicKey,
+        { name: "RSA-OAEP", hash: "SHA-256" },
+        true,
+        ["encrypt"]
+      );
+      state.keyPair = { privateKey, publicKey, publicJwk: jwk.publicKey };
+      return state.keyPair;
+    } catch (e) {
+      console.warn("Failed to load keypair", e);
+    }
+  }
+  const pair = await crypto.subtle.generateKey(
+    {
+      name: "RSA-OAEP",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
+    true,
+    ["encrypt", "decrypt"]
+  );
+  const publicJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+  const privateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+  localStorage.setItem(
+    KEY_STORAGE,
+    JSON.stringify({ publicKey: publicJwk, privateKey: privateJwk })
+  );
+  state.keyPair = { privateKey: pair.privateKey, publicKey: pair.publicKey, publicJwk };
+  return state.keyPair;
+}
+
+function bufToB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+function b64ToBuf(b64) {
+  const s = atob(b64);
+  const bytes = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function importPublicJwk(jwk) {
+  return crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "RSA-OAEP", hash: "SHA-256" },
+    false,
+    ["encrypt"]
+  );
+}
+
+async function encryptDm(plaintext, recipientPublicJwk) {
+  if (!state.keyPair) await ensureKeyPair();
+  const aesKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, [
+    "encrypt",
+    "decrypt",
+  ]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    enc.encode(plaintext)
+  );
+  const rawAes = await crypto.subtle.exportKey("raw", aesKey);
+  const recipientKey = await importPublicJwk(recipientPublicJwk);
+  const wrappedTo = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, recipientKey, rawAes);
+  // Also wrap for sender so they can re-read their own DMs
+  const wrappedFrom = await crypto.subtle.encrypt(
+    { name: "RSA-OAEP" },
+    state.keyPair.publicKey,
+    rawAes
+  );
+  return {
+    ciphertext: bufToB64(ciphertext),
+    iv: bufToB64(iv),
+    wrappedKey: bufToB64(wrappedTo),
+    wrappedKeySender: bufToB64(wrappedFrom),
+  };
+}
+
+async function decryptDm(msg) {
+  if (!state.keyPair) await ensureKeyPair();
+  const tryKeys = [];
+  if (msg.wrappedKey) tryKeys.push(msg.wrappedKey);
+  if (msg.wrappedKeySender) tryKeys.push(msg.wrappedKeySender);
+  for (const wk of tryKeys) {
+    try {
+      const rawAes = await crypto.subtle.decrypt(
+        { name: "RSA-OAEP" },
+        state.keyPair.privateKey,
+        b64ToBuf(wk)
+      );
+      const aesKey = await crypto.subtle.importKey("raw", rawAes, { name: "AES-GCM" }, false, [
+        "decrypt",
+      ]);
+      const plain = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: b64ToBuf(msg.iv) },
+        aesKey,
+        b64ToBuf(msg.ciphertext)
+      );
+      return new TextDecoder().decode(plain);
+    } catch (_) {
+      /* try next */
+    }
+  }
+  return "[unable to decrypt]";
+}
 
 // ---------- DOM helpers ----------
 const $ = (sel) => document.querySelector(sel);
@@ -212,6 +341,8 @@ function demoApi(action, payload) {
       countdownEndsAt: null,
       status: "playing",
       winners: null,
+      publicChat: [],
+      dms: [],
     };
     db.games[gameId] = game;
     lobby.status = "playing";
@@ -314,6 +445,46 @@ function demoApi(action, payload) {
     }
     saveDemo(db);
     return { ok: true };
+  }
+
+  if (action === "updatePublicKey") {
+    me.publicKey = payload.publicKey || null;
+    saveDemo(db);
+    return { ok: true };
+  }
+
+  if (action === "sendChat") {
+    const lobby = db.lobbies[payload.lobbyId];
+    if (!lobby || !lobby.gameId) return { ok: false, error: "No game" };
+    const game = db.games[lobby.gameId];
+    if (!game) return { ok: false, error: "No game" };
+    const channel = payload.channel === "dm" ? "dm" : "public";
+    if (channel === "public") {
+      const text = String(payload.text || "").trim().slice(0, 200);
+      if (!text) return { ok: false, error: "Empty message" };
+      game.publicChat = game.publicChat || [];
+      game.publicChat.push({ from: me.username, text, t: Date.now() });
+      if (game.publicChat.length > 80) game.publicChat = game.publicChat.slice(-60);
+    } else {
+      const to = String(payload.to || "");
+      if (!to || !game.players[to]) return { ok: false, error: "Invalid recipient" };
+      if (to === me.username) return { ok: false, error: "Cannot DM yourself" };
+      if (!payload.ciphertext || !payload.iv || !payload.wrappedKey)
+        return { ok: false, error: "Encrypted payload required" };
+      game.dms = game.dms || [];
+      game.dms.push({
+        from: me.username,
+        to,
+        ciphertext: payload.ciphertext,
+        iv: payload.iv,
+        wrappedKey: payload.wrappedKey,
+        wrappedKeySender: payload.wrappedKeySender || null,
+        t: Date.now(),
+      });
+      if (game.dms.length > 120) game.dms = game.dms.slice(-100);
+    }
+    saveDemo(db);
+    return { ok: true, game: publicGameView(game, me.username) };
   }
 
   return { ok: false, error: "Unknown action" };
@@ -425,6 +596,10 @@ function publicGameView(game, viewer) {
   });
   const me = game.players[viewer];
   const living = Object.keys(game.players).filter((n) => game.players[n].alive);
+  // DMs: only messages involving viewer
+  const dms = (game.dms || []).filter(
+    (m) => m.from === viewer || m.to === viewer
+  );
   return {
     id: game.id,
     positions,
@@ -439,11 +614,25 @@ function publicGameView(game, viewer) {
     status: game.status || "playing",
     winners: game.winners || null,
     livingCount: living.length,
+    publicChat: game.publicChat || [],
+    dms,
+    publicKeys: collectPublicKeys(game),
     you: me
       ? { hearts: me.hearts, ap: me.ap, range: me.range, alive: me.alive, x: me.x, y: me.y }
       : null,
     playerNames: Object.keys(game.players),
   };
+}
+
+function collectPublicKeys(game) {
+  const db = loadDemo();
+  const map = {};
+  Object.keys(game.players || {}).forEach((name) => {
+    const u = db.users.find((x) => x.username === name);
+    if (u && u.publicKey) map[name] = u.publicKey;
+  });
+  Object.assign(map, game.publicKeys || {});
+  return map;
 }
 
 function chebyshev(x1, y1, x2, y2) {
@@ -518,6 +707,15 @@ function applyAction(game, actorName, act, target) {
 }
 
 // ---------- Auth ----------
+async function uploadPublicKey() {
+  try {
+    const kp = await ensureKeyPair();
+    await api("updatePublicKey", { publicKey: kp.publicJwk });
+  } catch (e) {
+    console.warn("Public key upload failed", e);
+  }
+}
+
 async function doLogin(username, password) {
   showSpinner(true);
   try {
@@ -525,6 +723,7 @@ async function doLogin(username, password) {
     state.user = { username: data.username, token: data.token };
     localStorage.setItem("alliance_session", JSON.stringify(state.user));
     $("#nav-user").textContent = state.user.username;
+    await uploadPublicKey();
     showView("lobbies");
     await refreshLobbies();
   } catch (e) {
@@ -541,6 +740,7 @@ async function doRegister(username, password) {
     state.user = { username: data.username, token: data.token };
     localStorage.setItem("alliance_session", JSON.stringify(state.user));
     $("#nav-user").textContent = state.user.username;
+    await uploadPublicKey();
     showView("lobbies");
     await refreshLobbies();
   } catch (e) {
@@ -686,12 +886,25 @@ function renderBoard(game) {
         cell.classList.add("empty");
       }
 
-      // highlights for current action
+      // Own range is always visible only to you (not others' ranges)
+      if (me && me.alive) {
+        const dist = chebyshev(me.x, me.y, x, y);
+        if (dist > 0 && dist <= me.range) {
+          cell.classList.add("own-range");
+        }
+      }
+
+      // Stronger highlights for current action
       if (me && me.alive && action) {
         if (action === "move" && !occ) {
           if (chebyshev(me.x, me.y, x, y) === 1) cell.classList.add("adjacent");
         }
-        if ((action === "shoot" || action === "give") && occ && occ.alive && occ.name !== state.user.username) {
+        if (
+          (action === "shoot" || action === "give") &&
+          occ &&
+          occ.alive &&
+          occ.name !== state.user.username
+        ) {
           if (chebyshev(me.x, me.y, x, y) <= me.range) cell.classList.add("in-range");
         }
       }
@@ -834,12 +1047,14 @@ async function refreshGame() {
 
 function applyGameData(game) {
   state.lobby._game = game;
+  if (game.publicKeys) state.publicKeys = { ...state.publicKeys, ...game.publicKeys };
   renderBoard(game);
   renderPlayers(game);
   renderLog(game);
   renderOwnStats(game);
   renderTurnUI(game);
   renderMetaButtons(game);
+  renderChat(game);
 }
 
 function renderTurnUI(game) {
@@ -972,6 +1187,167 @@ function stopUiTimer() {
   }
 }
 
+// ---------- Chat ----------
+function setChatMode(mode) {
+  state.chatMode = mode;
+  $("#chat-tab-public").classList.toggle("active", mode === "public");
+  $("#chat-tab-dm").classList.toggle("active", mode === "dm");
+  $("#dm-target-row").classList.toggle("d-none", mode !== "dm");
+  $("#chat-hint").textContent =
+    mode === "public"
+      ? "Public messages are visible to everyone."
+      : "DMs are end-to-end encrypted. Only you and the recipient can read them.";
+  const g = state.lobby?._game;
+  if (g) renderChat(g);
+  else updateChatControls();
+}
+
+function updateChatControls() {
+  const inGame = !!(state.lobby && state.lobby.status === "playing" && state.lobby._game);
+  const input = $("#chat-input");
+  const send = $("#btn-chat-send");
+  if (!inGame) {
+    input.disabled = true;
+    send.disabled = true;
+    return;
+  }
+  if (state.chatMode === "dm") {
+    const ok = !!state.dmTarget;
+    input.disabled = !ok;
+    send.disabled = !ok;
+  } else {
+    input.disabled = false;
+    send.disabled = false;
+  }
+}
+
+async function renderChat(game) {
+  const box = $("#chat-box");
+  const sel = $("#dm-target");
+  const names = (game.playerNames || []).filter((n) => n !== state.user.username);
+  const prev = state.dmTarget;
+  sel.innerHTML =
+    `<option value="">Select player…</option>` +
+    names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  if (prev && names.includes(prev)) {
+    sel.value = prev;
+    state.dmTarget = prev;
+  } else {
+    state.dmTarget = sel.value || "";
+  }
+
+  updateChatControls();
+
+  if (state.chatMode === "public") {
+    const msgs = game.publicChat || [];
+    box.innerHTML = msgs.length
+      ? msgs
+          .slice()
+          .reverse()
+          .map(
+            (m) =>
+              `<div class="log-entry"><strong>${escapeHtml(m.from)}</strong>: ${escapeHtml(
+                m.text
+              )} <span class="text-muted small">${formatTime(m.t)}</span></div>`
+          )
+          .join("")
+      : `<div class="text-muted">No public messages yet.</div>`;
+    return;
+  }
+
+  // DM view
+  const target = state.dmTarget;
+  if (!target) {
+    box.innerHTML = `<div class="text-muted">Select a player to view encrypted DMs.</div>`;
+    return;
+  }
+  const thread = (game.dms || []).filter(
+    (m) =>
+      (m.from === state.user.username && m.to === target) ||
+      (m.from === target && m.to === state.user.username)
+  );
+  if (!thread.length) {
+    box.innerHTML = `<div class="text-muted">No messages with ${escapeHtml(target)} yet.</div>`;
+    return;
+  }
+  const lines = [];
+  for (const m of thread.slice().reverse()) {
+    const text = m.localPlain || (await decryptDm(m));
+    lines.push(
+      `<div class="log-entry"><strong>${escapeHtml(m.from)}</strong>: ${escapeHtml(
+        text
+      )} <span class="text-muted small">${formatTime(m.t)}</span></div>`
+    );
+  }
+  box.innerHTML = lines.join("");
+}
+
+async function sendChatMessage() {
+  const input = $("#chat-input");
+  const text = input.value.trim();
+  if (!text || !state.lobby) return;
+
+  if (state.chatMode === "public") {
+    showSpinner(true);
+    try {
+      const data = await api("sendChat", {
+        lobbyId: state.lobby.id,
+        channel: "public",
+        text,
+      });
+      input.value = "";
+      if (data.game) applyGameData(data.game);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      showSpinner(false);
+    }
+    return;
+  }
+
+  const to = state.dmTarget;
+  if (!to) return alert("Select a recipient");
+  const pub = state.publicKeys[to];
+  if (!pub) {
+    return alert(
+      "That player has no encryption key yet. They need to log in once so their key is uploaded."
+    );
+  }
+  showSpinner(true);
+  try {
+    await ensureKeyPair();
+    const enc = await encryptDm(text, pub);
+    const data = await api("sendChat", {
+      lobbyId: state.lobby.id,
+      channel: "dm",
+      to,
+      ...enc,
+      // optional: server ignores localPlain; we keep it only client-side for sent display
+    });
+    // Attach local plaintext for our own sent messages in this session
+    if (data.game && data.game.dms) {
+      const last = data.game.dms.filter((m) => m.from === state.user.username && m.to === to).pop();
+      if (last) last.localPlain = text;
+      // also stash on internal game object after apply
+      applyGameData(data.game);
+      const g = state.lobby._game;
+      if (g && g.dms) {
+        g.dms.forEach((m) => {
+          if (m.from === state.user.username && m.to === to && m.ciphertext === enc.ciphertext) {
+            m.localPlain = text;
+          }
+        });
+        renderChat(g);
+      }
+    }
+    input.value = "";
+  } catch (e) {
+    alert(e.message || String(e));
+  } finally {
+    showSpinner(false);
+  }
+}
+
 // ---------- Utils ----------
 function escapeHtml(s) {
   return String(s)
@@ -1089,10 +1465,26 @@ function bindEvents() {
       }
     });
   });
+
+  $("#chat-tab-public").addEventListener("click", () => setChatMode("public"));
+  $("#chat-tab-dm").addEventListener("click", () => setChatMode("dm"));
+  $("#dm-target").addEventListener("change", () => {
+    state.dmTarget = $("#dm-target").value;
+    const g = state.lobby?._game;
+    if (g) renderChat(g);
+    else updateChatControls();
+  });
+  $("#btn-chat-send").addEventListener("click", sendChatMessage);
+  $("#chat-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
 }
 
 // ---------- Boot ----------
-function boot() {
+async function boot() {
   bindEvents();
   const saved = localStorage.getItem("alliance_session");
   if (saved) {
@@ -1100,13 +1492,17 @@ function boot() {
       state.user = JSON.parse(saved);
       $("#nav-user").textContent = state.user.username;
       showView("lobbies");
+      await ensureKeyPair();
+      await uploadPublicKey();
       refreshLobbies();
       return;
     } catch (_) {}
   }
   showView("auth");
   if (ALLIANCE_DEMO_MODE) {
-    console.info("Alliance running in DEMO mode (localStorage). Set ALLIANCE_REMOTE_URL in alliance-config.js for real multiplayer.");
+    console.info(
+      "Alliance running in DEMO mode (localStorage). Set ALLIANCE_REMOTE_URL in alliance-config.js for real multiplayer."
+    );
   }
 }
 
