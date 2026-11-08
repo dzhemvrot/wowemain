@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://wowe-main.eu/sitemap.xml
