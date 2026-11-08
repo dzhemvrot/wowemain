@@ -4,6 +4,7 @@ const START_RANGE = 3;
 const START_AP = 1;
 const TURN_MS = 5 * 60 * 1000; // 5 minutes
 const READY_COUNTDOWN_MS = 10 * 1000;
+const NO_AP_COUNTDOWN_MS = 30 * 1000;
 
 const state = {
   user: null, // { username, token }
@@ -383,6 +384,7 @@ function demoApi(action, payload) {
     }
     const result = applyAction(game, me.username, payload.act, payload.target);
     if (!result.ok) return result;
+    maybeStartNoApCountdown(game);
     checkEndConditions(game);
     saveDemo(db);
     return { ok: true, game: publicGameView(game, me.username) };
@@ -503,6 +505,7 @@ function advanceTurn(game, reason) {
   game.turnStartedAt = Date.now();
   game.ready = [];
   game.countdownEndsAt = null;
+  game.noApCountdownEndsAt = null;
   game.log.push({
     t: Date.now(),
     type: "system",
@@ -527,12 +530,39 @@ function maybeStartReadyCountdown(game) {
   if (readyCount < need) game.countdownEndsAt = null;
 }
 
+function maybeStartNoApCountdown(game) {
+  if (game.status === "finished") return;
+  const living = livingNames(game);
+  if (living.length === 0) {
+    game.noApCountdownEndsAt = null;
+    return;
+  }
+  const anyAp = living.some((n) => (game.players[n].ap || 0) > 0);
+  if (anyAp) {
+    game.noApCountdownEndsAt = null;
+    return;
+  }
+  if (!game.noApCountdownEndsAt) {
+    game.noApCountdownEndsAt = Date.now() + NO_AP_COUNTDOWN_MS;
+    game.log.push({
+      t: Date.now(),
+      type: "system",
+      text: "No living player has AP left. Next turn in 30 seconds.",
+    });
+  }
+}
+
 function tickGame(game) {
   if (!game || game.status === "finished") return;
   const now = Date.now();
+  maybeStartNoApCountdown(game);
   // Ready countdown finished
   if (game.countdownEndsAt && now >= game.countdownEndsAt) {
     advanceTurn(game, `Turn ${((game.turn || 1) + 1)} begins (ready vote). Living players received 1 AP.`);
+  }
+  // No AP left countdown
+  if (game.noApCountdownEndsAt && now >= game.noApCountdownEndsAt) {
+    advanceTurn(game, `Turn ${((game.turn || 1) + 1)} begins (no AP left). Living players received 1 AP.`);
   }
   // 5-minute turn timer
   if (game.turnStartedAt && now - game.turnStartedAt >= TURN_MS) {
@@ -611,6 +641,7 @@ function publicGameView(game, viewer) {
     ready: game.ready || [],
     worldPeace: game.worldPeace || [],
     countdownEndsAt: game.countdownEndsAt || null,
+    noApCountdownEndsAt: game.noApCountdownEndsAt || null,
     status: game.status || "playing",
     winners: game.winners || null,
     livingCount: living.length,
@@ -639,6 +670,20 @@ function chebyshev(x1, y1, x2, y2) {
   return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2));
 }
 
+/** Range shape for range R: (2R-1)×(2R-1) square (Chebyshev ≤ R-1) plus one orthogonal poke at distance R.
+ *  R=3 → 5×5 plus N/S/E/W at 3 (orthogonal 3, diagonal 2). */
+function inRange(x1, y1, x2, y2, range) {
+  const dx = Math.abs(x1 - x2);
+  const dy = Math.abs(y1 - y2);
+  if (dx === 0 && dy === 0) return false;
+  if (dx === 0 || dy === 0) return Math.max(dx, dy) <= range;
+  return Math.max(dx, dy) <= Math.max(0, range - 1);
+}
+
+function isAdjacent(x1, y1, x2, y2) {
+  return chebyshev(x1, y1, x2, y2) === 1;
+}
+
 function applyAction(game, actorName, act, target) {
   const actor = game.players[actorName];
   if (!actor || !actor.alive) return { ok: false, error: "You are eliminated" };
@@ -656,7 +701,7 @@ function applyAction(game, actorName, act, target) {
     const { x, y } = target || {};
     if (x == null || y == null || x < 0 || y < 0 || x >= GRID || y >= GRID)
       return { ok: false, error: "Invalid cell" };
-    if (chebyshev(actor.x, actor.y, x, y) !== 1) return { ok: false, error: "Must be adjacent" };
+    if (!isAdjacent(actor.x, actor.y, x, y)) return { ok: false, error: "Must be adjacent" };
     const occupied = Object.values(game.players).some((p) => p.alive && p.x === x && p.y === y);
     if (occupied) return { ok: false, error: "Cell occupied" };
     actor.ap -= 1;
@@ -671,8 +716,8 @@ function applyAction(game, actorName, act, target) {
     const victim = game.players[targetName];
     if (!victim) return { ok: false, error: "Invalid target" };
     if (targetName === actorName) return { ok: false, error: "Cannot target yourself" };
-    const dist = chebyshev(actor.x, actor.y, victim.x, victim.y);
-    if (dist > actor.range) return { ok: false, error: "Out of range" };
+    if (!inRange(actor.x, actor.y, victim.x, victim.y, actor.range))
+      return { ok: false, error: "Out of range" };
 
     if (act === "give") {
       if (!victim.alive) return { ok: false, error: "Target is dead" };
@@ -887,17 +932,14 @@ function renderBoard(game) {
       }
 
       // Own range is always visible only to you (not others' ranges)
-      if (me && me.alive) {
-        const dist = chebyshev(me.x, me.y, x, y);
-        if (dist > 0 && dist <= me.range) {
-          cell.classList.add("own-range");
-        }
+      if (me && me.alive && inRange(me.x, me.y, x, y, me.range)) {
+        cell.classList.add("own-range");
       }
 
       // Stronger highlights for current action
       if (me && me.alive && action) {
         if (action === "move" && !occ) {
-          if (chebyshev(me.x, me.y, x, y) === 1) cell.classList.add("adjacent");
+          if (isAdjacent(me.x, me.y, x, y)) cell.classList.add("adjacent");
         }
         if (
           (action === "shoot" || action === "give") &&
@@ -905,7 +947,7 @@ function renderBoard(game) {
           occ.alive &&
           occ.name !== state.user.username
         ) {
-          if (chebyshev(me.x, me.y, x, y) <= me.range) cell.classList.add("in-range");
+          if (inRange(me.x, me.y, x, y, me.range)) cell.classList.add("in-range");
         }
       }
 
@@ -1077,8 +1119,12 @@ function renderTurnUI(game) {
 function updateTimersDisplay(game) {
   if (!game || game.status === "finished") return;
   const now = Date.now();
-  if (game.countdownEndsAt && game.countdownEndsAt > now) {
-    const sec = Math.max(0, Math.ceil((game.countdownEndsAt - now) / 1000));
+  const ends = [];
+  if (game.countdownEndsAt && game.countdownEndsAt > now) ends.push(game.countdownEndsAt);
+  if (game.noApCountdownEndsAt && game.noApCountdownEndsAt > now) ends.push(game.noApCountdownEndsAt);
+  if (ends.length) {
+    const soonest = Math.min(...ends);
+    const sec = Math.max(0, Math.ceil((soonest - now) / 1000));
     $("#countdown-badge").classList.remove("d-none");
     $("#countdown-sec").textContent = String(sec);
   } else {
