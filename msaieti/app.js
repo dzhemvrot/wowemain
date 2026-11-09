@@ -5,7 +5,7 @@
   const STORAGE_DATA = "msaieti-data-v2";
   const SAVE_DEBOUNCE_MS = 600;
   const MAX_LOGS = 2000;
-  const MIN_PASSWORD_LEN = 6;
+  const MIN_PASSWORD_LEN = 8;
 
   const ACTION_LABELS = {
     login: "Ienāca",
@@ -27,6 +27,8 @@
     generate_numbers: "Ģenerēja numurus",
     clear_numbers: "Notīrīja numurus",
     phase_names: "Ieslēdza 2. posmu (vārdi)",
+    captain_assign: "Kapitāns piešķīra bērnu",
+    reset_codes: "Atjaunoja kodus",
   };
 
   const TYPE_LABELS = {
@@ -56,6 +58,35 @@
   let remoteEnabled = false;
   let syncState = "idle";
   let adminPassTargetId = null;
+  let pendingLogs = [];
+  let dataRev = null;
+  let saving = false;
+  let saveAgain = false;
+
+  function apiUrl(path) {
+    return REMOTE_URL.trim().replace(/\/+$/, "") + path;
+  }
+
+  async function api(path, body) {
+    const res = await fetch(apiUrl(path), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ ...(body || {}), token: currentUser ? currentUser.token : null }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      currentUser = null;
+      saveSession(null);
+      showLogin();
+      throw new Error("Sesija beigusies — ienāc vēlreiz.");
+    }
+    if (!json || json.ok === false) {
+      const e = new Error((json && json.error) || "HTTP " + res.status);
+      e.conflict = !!(json && json.conflict);
+      throw e;
+    }
+    return json;
+  }
 
   // ---------- Password hashing (SHA-256 + salt) ----------
   function randomSalt() {
@@ -164,31 +195,12 @@
     return typeof REMOTE_URL === "string" && REMOTE_URL.trim().length > 10;
   }
 
-  function loadLocal() {
-    try {
-      let raw = localStorage.getItem(STORAGE_DATA);
-      if (!raw) raw = localStorage.getItem("msaieti-data-v1");
-      if (!raw) return {};
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
-
-  function saveLocal() {
-    const payload = {
-      users: usersCache,
-      people: peopleCache,
-      teams: teamsCache,
-      logs: logsCache.slice(-MAX_LOGS),
-      settings: settingsCache,
-      carousel: carouselCache,
-    };
-    localStorage.setItem(STORAGE_DATA, JSON.stringify(payload));
-  }
+  function loadLocal() { return {}; }
+  function saveLocal() {}
 
   function applyPayload(data) {
     if (!data || typeof data !== "object") return;
+    if (typeof data.rev === "number") dataRev = data.rev;
     if (Array.isArray(data.users)) usersCache = data.users;
     if (Array.isArray(data.people)) peopleCache = data.people;
     if (Array.isArray(data.teams)) teamsCache = data.teams;
@@ -216,31 +228,27 @@
   }
 
   async function fetchRemote() {
-    const res = await fetch(REMOTE_URL, { method: "GET", cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    if (!data || data.ok === false) throw new Error(data && data.error ? data.error : "Remote error");
-    return data;
+    return api("/data", {});
   }
 
   async function pushRemote() {
-    const body = {
-      users: usersCache,
-      people: peopleCache,
-      teams: teamsCache,
-      logs: logsCache.slice(-MAX_LOGS),
-      settings: settingsCache,
-      carousel: carouselCache,
-    };
-    const res = await fetch(REMOTE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    if (!data || data.ok === false) throw new Error(data && data.error ? data.error : "Remote error");
-    return data;
+    const sending = pendingLogs;
+    pendingLogs = [];
+    try {
+      const r = await api("/save", {
+        baseRev: dataRev,
+        people: peopleCache,
+        teams: teamsCache,
+        settings: settingsCache,
+        carousel: carouselCache,
+        newLogs: sending,
+      });
+      dataRev = r.rev;
+      return r;
+    } catch (e) {
+      pendingLogs = sending.concat(pendingLogs);
+      throw e;
+    }
   }
 
   async function loadFromRemoteOrLocal() {
@@ -292,12 +300,8 @@
 
   async function doSave() {
     saveTimer = null;
-    saveLocal();
-    if (!remoteEnabled) {
-      syncState = "local";
-      updateSyncBadge();
-      return;
-    }
+    if (saving) { saveAgain = true; return; }
+    saving = true;
     syncState = "saving";
     updateSyncBadge();
     try {
@@ -305,9 +309,18 @@
       syncState = "ok";
     } catch (err) {
       console.warn("Remote save failed", err);
-      syncState = "error";
+      if (err.conflict) {
+        await loadFromRemoteOrLocal();
+        renderAll();
+        alert("Dati tika mainīti no citas vietas (piem., kapitāni). Lapa atjaunota — atkārto pēdējo darbību.");
+      } else {
+        syncState = "error";
+      }
+    } finally {
+      saving = false;
+      updateSyncBadge();
+      if (saveAgain) { saveAgain = false; doSave(); }
     }
-    updateSyncBadge();
   }
 
   function updateSyncBadge() {
@@ -326,28 +339,18 @@
     el.textContent = text;
   }
 
-  function ensureSeedUsers() {
-    if (!usersCache.length) {
-      usersCache = JSON.parse(JSON.stringify(SEED_USERS));
-      scheduleSave();
-    } else {
-      const hasAdmin = usersCache.some((u) => String(u.username).toLowerCase() === "admin");
-      if (!hasAdmin) {
-        usersCache.unshift(JSON.parse(JSON.stringify(SEED_USERS[0])));
-        scheduleSave();
-      }
-    }
-  }
+  function ensureSeedUsers() {}
 
   // ---------- Logs ----------
   function addLog(action, detail) {
-    logsCache.push({
+    const entry = {
       ts: new Date().toISOString(),
-      userId: currentUser ? currentUser.id : null,
       username: currentUser ? currentUser.username : "?",
       action,
       detail: detail || "",
-    });
+    };
+    logsCache.push(entry);
+    pendingLogs.push(entry);
     if (logsCache.length > MAX_LOGS) logsCache = logsCache.slice(-MAX_LOGS);
   }
 
@@ -2428,48 +2431,40 @@
     const username = ($("#username-input").value || "").trim();
     const password = $("#password-input").value || "";
     const err = $("#login-error");
-
     remoteEnabled = hasRemote();
+    let res;
     try {
-      if (remoteEnabled) {
-        applyPayload(await fetchRemote());
-        saveLocal();
-      } else {
-        applyPayload(loadLocal());
-      }
+      const r = await fetch(apiUrl("/login"), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ username, password }),
+      });
+      res = await r.json();
     } catch {
-      applyPayload(loadLocal());
-    }
-    ensureSeedUsers();
-
-    const user = usersCache.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase()
-    );
-    if (!user || !(await verifyUserPassword(user, password))) {
+      err.textContent = "Neizdevās savienoties ar serveri.";
       err.classList.remove("d-none");
       return;
     }
-    if (user.password != null && !user.passwordHash) {
-      await setUserPasswordFields(user, password);
-      scheduleSave();
+    if (!res || !res.ok) {
+      err.textContent = (res && res.error) || "Nepareizs lietotājvārds vai parole.";
+      err.classList.remove("d-none");
+      return;
     }
     err.classList.add("d-none");
     currentUser = {
-      id: user.id,
-      username: user.username,
-      isAdmin: !!user.isAdmin,
+      id: res.user.id,
+      username: res.user.username,
+      isAdmin: !!res.user.isAdmin,
+      token: res.token,
     };
     saveSession(currentUser);
     $("#username-input").value = "";
     $("#password-input").value = "";
-    addLog("login", "");
-    scheduleSave();
     showApp();
   }
 
   function logout() {
-    addLog("logout", "");
-    scheduleSave();
+    api("/logout", {}).catch(() => {});
     currentUser = null;
     saveSession(null);
     showLogin();
@@ -2777,84 +2772,49 @@
     const username = ($("#user-username").value || "").trim();
     const name = ($("#user-name").value || "").trim();
     const role = $("#user-role").value || "organizer";
-    let isAdmin = $("#user-is-admin").checked;
+    const isAdmin = $("#user-is-admin").checked;
     const password = $("#user-password").value || "";
 
-    if (!username) {
-      alert("Ievadiet lietotājvārdu.");
-      return;
-    }
-    if (!id && password.length < MIN_PASSWORD_LEN) {
+    if (!username) { alert("Ievadiet lietotājvārdu."); return; }
+    if ((!id || password) && password.length < MIN_PASSWORD_LEN) {
       alert("Parolei jābūt vismaz " + MIN_PASSWORD_LEN + " simboliem.");
       return;
     }
-    if (password && password.length < MIN_PASSWORD_LEN) {
-      alert("Parolei jābūt vismaz " + MIN_PASSWORD_LEN + " simboliem.");
-      return;
-    }
-
-    const dup = usersCache.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase() && u.id !== id
-    );
-    if (dup) {
-      alert("Šāds lietotājvārds jau eksistē.");
-      return;
-    }
-
-    if (id) {
-      const u = usersCache.find((x) => x.id === id);
-      if (!u) return;
-      if (isMainAdmin(u)) {
-        isAdmin = true;
-      } else if (!isMainAdmin(currentUser)) {
-        isAdmin = !!u.isAdmin;
+    try {
+      let r;
+      if (id) {
+        r = await api("/users/edit", { id, username, name, role, isAdmin });
+        if (password) await api("/users/password", { id, password });
+      } else {
+        r = await api("/users/add", { username, name, role, isAdmin, password });
       }
-      u.username = isMainAdmin(u) ? u.username : username;
-      u.name = name;
-      u.role = role;
-      u.isAdmin = isAdmin;
-      if (password) await setUserPasswordFields(u, password);
-      addLog("edit_user", u.username);
-    } else {
-      if (!isMainAdmin(currentUser)) isAdmin = false;
-      const u = {
-        id: uid("u"),
-        username,
-        name,
-        role,
-        isAdmin,
-      };
-      await setUserPasswordFields(u, password);
-      usersCache.push(u);
-      addLog("add_user", username);
+      usersCache = r.users || usersCache;
+      renderAll();
+      bootstrap.Modal.getInstance($("#modal-user")).hide();
+    } catch (e) {
+      alert(e.message);
     }
-    scheduleSave();
-    renderAll();
-    bootstrap.Modal.getInstance($("#modal-user")).hide();
   }
 
-  function removeUser(id) {
+  async function removeUser(id) {
     const u = usersCache.find((x) => x.id === id);
-    if (!u || !canDeleteUser(u)) return;
+    if (!u) return;
     if (!confirm(`Dzēst lietotāju «${u.username}»?`)) return;
-    // Unassign as mentor
-    for (const t of teamsCache) {
-      if (t.mentorId === id) t.mentorId = null;
+    try {
+      const r = await api("/users/delete", { id });
+      usersCache = r.users || usersCache;
+      renderAll();
+    } catch (e) {
+      alert(e.message);
     }
-    usersCache = usersCache.filter((x) => x.id !== id);
-    addLog("remove_user", u.username);
-    scheduleSave();
-    renderAll();
   }
 
-  // ---------- Password change ----------
   async function changeOwnPassword() {
     const err = $("#cp-error");
     err.classList.add("d-none");
     const current = $("#cp-current").value || "";
     const neu = $("#cp-new").value || "";
     const neu2 = $("#cp-new2").value || "";
-
     if (neu.length < MIN_PASSWORD_LEN) {
       err.textContent = "Jaunajai parolei jābūt vismaz " + MIN_PASSWORD_LEN + " simboliem.";
       err.classList.remove("d-none");
@@ -2865,19 +2825,16 @@
       err.classList.remove("d-none");
       return;
     }
-    const user = usersCache.find((u) => u.id === currentUser.id);
-    if (!user || !(await verifyUserPassword(user, current))) {
-      err.textContent = "Pašreizējā parole ir nepareiza.";
+    try {
+      await api("/password", { current, newPassword: neu });
+      bootstrap.Modal.getInstance($("#modal-change-password")).hide();
+      $("#cp-current").value = "";
+      $("#cp-new").value = "";
+      $("#cp-new2").value = "";
+    } catch (e) {
+      err.textContent = e.message;
       err.classList.remove("d-none");
-      return;
     }
-    await setUserPasswordFields(user, neu);
-    addLog("change_password", "");
-    scheduleSave();
-    bootstrap.Modal.getInstance($("#modal-change-password")).hide();
-    $("#cp-current").value = "";
-    $("#cp-new").value = "";
-    $("#cp-new2").value = "";
   }
 
   async function adminSetPassword() {
@@ -2889,14 +2846,15 @@
       err.classList.remove("d-none");
       return;
     }
-    const user = usersCache.find((u) => u.id === adminPassTargetId);
-    if (!user || !canSetPasswordFor(user)) return;
-    await setUserPasswordFields(user, neu);
-    addLog("admin_set_password", user.username);
-    scheduleSave();
-    bootstrap.Modal.getInstance($("#modal-admin-password")).hide();
-    $("#ap-new").value = "";
-    adminPassTargetId = null;
+    try {
+      await api("/users/password", { id: adminPassTargetId, password: neu });
+      bootstrap.Modal.getInstance($("#modal-admin-password")).hide();
+      $("#ap-new").value = "";
+      adminPassTargetId = null;
+    } catch (e) {
+      err.textContent = e.message;
+      err.classList.remove("d-none");
+    }
   }
 
   // ---------- Events ----------
@@ -3149,10 +3107,60 @@
         if (to) moveNumberToTeam(code, from, to);
       }
     });
+    if ($("#btn-show-codes")) {
+      $("#btn-show-codes").addEventListener("click", showCodes);
+      $("#btn-print-codes").addEventListener("click", printCodes);
+      $("#btn-reset-all-codes").addEventListener("click", () =>
+        resetCodes({ all: true }, "Izveidot jaunus kodus VISĀM komandām? Vecie kodi pārstās darboties.")
+      );
+      $("#codes-body").addEventListener("click", (e) => {
+        const b = e.target.closest(".btn-reset-code");
+        if (b) resetCodes({ id: b.dataset.id }, "Izveidot jaunu kodu šai komandai?");
+      });
+    }
+  }
+
+  // ---------- Team codes ----------
+  function renderCodes(list) {
+    $("#codes-box").classList.remove("d-none");
+    $("#btn-print-codes").classList.remove("d-none");
+    $("#btn-reset-all-codes").classList.remove("d-none");
+    $("#codes-body").innerHTML = list
+      .map((c) => {
+        const t = teamsCache.find((x) => x.id === c.id);
+        return (
+          "<tr><td>" + escapeHtml(teamLabel(t || { number: c.number })) + "</td>" +
+          '<td><code class="fs-6">' + escapeHtml(c.code) + "</code></td>" +
+          '<td class="text-end"><button type="button" class="btn btn-outline-warning btn-sm btn-reset-code" data-id="' +
+          escapeHtml(c.id) + '">Jauns kods</button></td></tr>'
+        );
+      })
+      .join("");
+  }
+
+  async function showCodes() {
+    try { renderCodes((await api("/codes", {})).codes); } catch (e) { alert(e.message); }
+  }
+
+  async function resetCodes(body, question) {
+    if (!confirm(question)) return;
+    try { renderCodes((await api("/codes/reset", body)).codes); } catch (e) { alert(e.message); }
+  }
+
+  function printCodes() {
+    const rows = [...document.querySelectorAll("#codes-body tr")]
+      .map((tr) => "<tr><td>" + tr.cells[0].innerHTML + '</td><td style="font-family:monospace;font-size:20px">' +
+        tr.cells[1].textContent + "</td></tr>")
+      .join("");
+    const w = window.open("", "_blank");
+    w.document.write('<html><head><title>Kodi</title></head><body><h3>Komandu kodi</h3><table border="1" cellpadding="8" cellspacing="0">' + rows + "</table></body></html>");
+    w.document.close();
+    w.print();
   }
 
   // ---------- Init ----------
   async function init() {
+    try { localStorage.removeItem(STORAGE_DATA); localStorage.removeItem("msaieti-data-v1"); } catch (_) {}
     bindEvents();
     const session = loadSession();
     if (session && session.id && session.username) {

@@ -1,90 +1,41 @@
 (() => {
   "use strict";
 
-  const STORAGE_DATA = "msaieti-data-v2";
-  const SAVE_DEBOUNCE_MS = 500;
+  const SESS_KEY = "msaieti-captain-session";
   const $ = (sel) => document.querySelector(sel);
 
-  let peopleCache = [];
-  let teamsCache = [];
-  let settingsCache = { phase: "numbers", numberScheme: "prefix" };
-  let saveTimer = null;
+  let phase = "numbers";
+  let teams = [];
+  let kids = [];
   let selectedTeamId = null;
+  let teamCode = null;
+  let restored = false;
 
-  function hasRemote() {
-    return typeof REMOTE_URL === "string" && REMOTE_URL.trim().length > 10;
-  }
+  const apiUrl = (p) => REMOTE_URL.trim().replace(/\/+$/, "") + p;
 
-  function loadLocal() {
-    try {
-      let raw = localStorage.getItem(STORAGE_DATA);
-      if (!raw) raw = localStorage.getItem("msaieti-data-v1");
-      if (!raw) return {};
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
-
-  function saveLocal() {
-    const prev = loadLocal();
-    const payload = {
-      users: prev.users || [],
-      people: peopleCache,
-      teams: teamsCache,
-      logs: prev.logs || [],
-      settings: settingsCache,
-    };
-    localStorage.setItem(STORAGE_DATA, JSON.stringify(payload));
-  }
-
-  function applyPayload(data) {
-    if (!data || typeof data !== "object") return;
-    if (Array.isArray(data.people)) peopleCache = data.people;
-    if (Array.isArray(data.teams)) teamsCache = data.teams;
-    if (data.settings && typeof data.settings === "object") {
-      settingsCache = {
-        phase: data.settings.phase === "names" ? "names" : "numbers",
-        numberScheme:
-          data.settings.numberScheme === "legacy" ? "legacy" : "prefix",
-      };
-    }
-  }
-
-  async function fetchRemote() {
-    const res = await fetch(REMOTE_URL, { method: "GET", cache: "no-store" });
+  async function get(path) {
+    const res = await fetch(apiUrl(path), { method: "GET", cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    if (!data || data.ok === false)
-      throw new Error((data && data.error) || "Remote error");
-    return data;
+    return res.json();
   }
 
-  async function pushRemote() {
-    // Merge with latest remote to avoid wiping users/logs
-    let base = {};
-    try {
-      base = await fetchRemote();
-    } catch (_) {
-      base = loadLocal();
-    }
-    const body = {
-      users: base.users || [],
-      people: peopleCache,
-      teams: teamsCache,
-      logs: base.logs || [],
-      settings: base.settings || settingsCache,
-    };
-    const res = await fetch(REMOTE_URL, {
+  async function post(path, body) {
+    const res = await fetch(apiUrl(path), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(body || {}),
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    if (!data || data.ok === false)
-      throw new Error((data && data.error) || "Remote error");
-    return data;
+    const json = await res.json().catch(() => ({}));
+    if (!json || json.ok === false) throw new Error((json && json.error) || "HTTP " + res.status);
+    return json;
+  }
+
+  function saveSess() {
+    try {
+      if (selectedTeamId && teamCode) {
+        sessionStorage.setItem(SESS_KEY, JSON.stringify({ teamId: selectedTeamId, code: teamCode }));
+      } else sessionStorage.removeItem(SESS_KEY);
+    } catch (_) {}
   }
 
   function setBadge(cls, text) {
@@ -95,244 +46,131 @@
   }
 
   function showState(id) {
-    ["state-loading", "state-closed", "state-error", "state-open"].forEach(
-      (s) => {
-        const el = document.getElementById(s);
-        if (el) el.classList.toggle("d-none", s !== id);
-      }
-    );
+    ["state-loading", "state-closed", "state-error", "state-open"].forEach((s) => {
+      const el = document.getElementById(s);
+      if (el) el.classList.toggle("d-none", s !== id);
+    });
   }
 
   function firstName(full) {
-    const s = String(full || "").trim();
-    if (!s) return "?";
-    const parts = s.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) return parts[parts.length - 1];
-    return parts[0];
+    const parts = String(full || "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "?";
+    return parts.length >= 2 ? parts[parts.length - 1] : parts[0];
   }
 
   function teamLabel(t) {
     if (!t) return "—";
     const n = t.number != null ? t.number : "?";
-    if (t.name && String(t.name).trim()) {
-      return `${n}. ${String(t.name).trim()}`;
-    }
-    const captains = (t.captainIds || [])
-      .map((id) => peopleCache.find((p) => p.id === id))
-      .filter(Boolean)
-      .map((c) => firstName(c.name));
-    if (captains.length >= 2) {
-      return `Komanda ${captains[0]} un ${captains[1]}`;
-    }
-    if (captains.length === 1) {
-      return `Komanda ${captains[0]}`;
-    }
+    if (t.name && String(t.name).trim()) return `${n}. ${String(t.name).trim()}`;
+    const c = (t.captains || []).map(firstName);
+    if (c.length >= 2) return `Komanda ${c[0]} un ${c[1]}`;
+    if (c.length === 1) return `Komanda ${c[0]}`;
     return `Komanda ${n}`;
   }
 
-  function classLabel(p) {
-    if (!p || p.type === "captain") return "—";
-    return `${p.grade != null ? p.grade : "?"}.${p.letter || "a"}`;
-  }
-
-  function classKey(p) {
-    return classLabel(p);
-  }
+  const classLabel = (p) => `${p.grade != null ? p.grade : "?"}.${p.letter || "a"}`;
 
   function escapeHtml(s) {
     return String(s ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  function participants() {
-    return peopleCache.filter((p) => p.type === "participant");
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
   function fillTeams() {
     const sel = $("#team-select");
     if (!sel) return;
-    const prev = selectedTeamId || sel.value;
-    const sorted = [...teamsCache].sort(
-      (a, b) => (a.number || 0) - (b.number || 0)
-    );
     sel.innerHTML = '<option value="">— Izvēlies komandu —</option>';
-    for (const t of sorted) {
+    for (const t of teams) {
       const opt = document.createElement("option");
       opt.value = t.id;
-      const captains = (t.captainIds || [])
-        .map((id) => peopleCache.find((p) => p.id === id))
-        .filter(Boolean)
-        .map((c) => c.name)
-        .join(", ");
-      opt.textContent = teamLabel(t) + (captains ? ` (${captains})` : "");
+      const caps = (t.captains || []).join(", ");
+      opt.textContent = teamLabel(t) + (caps ? ` (${caps})` : "");
       sel.appendChild(opt);
     }
-    if (prev && sorted.some((t) => t.id === prev)) {
-      sel.value = prev;
-      selectedTeamId = prev;
-    }
+    if (selectedTeamId && teams.some((t) => t.id === selectedTeamId)) sel.value = selectedTeamId;
   }
 
   function renderKids() {
     const panel = $("#team-panel");
     const list = $("#kid-list");
-    if (!selectedTeamId) {
+    if (!selectedTeamId || !teamCode) {
       if (panel) panel.classList.add("d-none");
       return;
     }
-    if (panel) panel.classList.remove("d-none");
+    panel.classList.remove("d-none");
 
-    const q = ($("#kid-search") && $("#kid-search").value.trim().toLowerCase()) || "";
-    const classFilter =
-      ($("#class-filter") && $("#class-filter").value) || "";
-    let kids = participants();
-    if (q) {
-      kids = kids.filter((p) => (p.name || "").toLowerCase().includes(q));
-    }
-    if (classFilter) {
-      kids = kids.filter((p) => classKey(p) === classFilter);
-    }
-    kids.sort((a, b) => {
+    const q = ($("#kid-search").value || "").trim().toLowerCase();
+    const classFilter = $("#class-filter").value || "";
+    let shown = kids.slice();
+    if (q) shown = shown.filter((p) => (p.name || "").toLowerCase().includes(q));
+    if (classFilter) shown = shown.filter((p) => classLabel(p) === classFilter);
+    shown.sort((a, b) => {
       const ca = classLabel(a).localeCompare(classLabel(b), "lv");
       if (ca !== 0) return ca;
-      const inA = a.teamId === selectedTeamId ? 0 : 1;
-      const inB = b.teamId === selectedTeamId ? 0 : 1;
-      if (inA !== inB) return inA - inB;
+      const ia = a.teamId === selectedTeamId ? 0 : 1;
+      const ib = b.teamId === selectedTeamId ? 0 : 1;
+      if (ia !== ib) return ia - ib;
       return (a.name || "").localeCompare(b.name || "", "lv");
     });
 
-    const inTeam = participants().filter((p) => p.teamId === selectedTeamId).length;
-    const total = participants().length;
-    const cIn = $("#count-in-team");
-    const cTot = $("#count-total");
-    if (cIn) cIn.textContent = inTeam + " komandā";
-    if (cTot) cTot.textContent = "no " + total;
+    $("#count-in-team").textContent = kids.filter((p) => p.teamId === selectedTeamId).length + " komandā";
+    $("#count-total").textContent = "no " + kids.length;
 
-    const team = teamsCache.find((t) => t.id === selectedTeamId);
-    const meta = $("#team-meta");
-    if (meta && team) {
-      const caps = (team.captainIds || [])
-        .map((id) => peopleCache.find((p) => p.id === id))
-        .filter(Boolean)
-        .map((c) => c.name);
-      meta.textContent = caps.length
-        ? "Kapitāni: " + caps.join(", ")
-        : "Kapitāni nav norādīti";
-    }
+    const team = teams.find((t) => t.id === selectedTeamId);
+    const caps = team ? (team.captains || []) : [];
+    $("#team-meta").textContent = caps.length ? "Kapitāni: " + caps.join(", ") : "Kapitāni nav norādīti";
 
-    // Fill class filter options once we have data
     const cf = $("#class-filter");
-    if (cf && cf.options.length <= 1) {
-      const classes = [
-        ...new Set(participants().map((p) => classKey(p))),
-      ].sort((a, b) => a.localeCompare(b, "lv"));
-      for (const ck of classes) {
+    if (cf.options.length <= 1) {
+      [...new Set(kids.map(classLabel))].sort((a, b) => a.localeCompare(b, "lv")).forEach((ck) => {
         const opt = document.createElement("option");
         opt.value = ck;
         opt.textContent = ck;
         cf.appendChild(opt);
-      }
+      });
     }
 
-    if (!list) return;
-
-    // Group by class with sticky headers
     let html = "";
     let lastClass = null;
-    for (const p of kids) {
-      const ck = classKey(p);
+    for (const p of shown) {
+      const ck = classLabel(p);
       if (ck !== lastClass) {
         lastClass = ck;
-        const inClass = kids.filter((x) => classKey(x) === ck).length;
-        const inClassMine = kids.filter(
-          (x) => classKey(x) === ck && x.teamId === selectedTeamId
-        ).length;
-        html += `<div class="class-header mt-2 mb-1"><strong>${escapeHtml(
-          ck
-        )}</strong> <span class="text-muted small">(${inClassMine}/${inClass})</span></div>`;
+        const inClass = shown.filter((x) => classLabel(x) === ck).length;
+        const mineInClass = shown.filter((x) => classLabel(x) === ck && x.teamId === selectedTeamId).length;
+        html += `<div class="class-header mt-2 mb-1"><strong>${escapeHtml(ck)}</strong> <span class="text-muted small">(${mineInClass}/${inClass})</span></div>`;
       }
       const mine = p.teamId === selectedTeamId;
-      const other =
-        p.teamId && p.teamId !== selectedTeamId
-          ? teamsCache.find((t) => t.id === p.teamId)
-          : null;
-      const cls = mine
-        ? "kid-row in-team"
-        : other
-        ? "kid-row other-team"
-        : "kid-row";
+      const other = p.teamId && !mine ? teams.find((t) => t.id === p.teamId) : null;
+      const cls = mine ? "kid-row in-team" : other ? "kid-row other-team" : "kid-row";
       html += `<label class="${cls}">
-          <input type="checkbox" class="form-check-input kid-check" data-id="${p.id}" ${
-        mine ? "checked" : ""
-      }>
+          <input type="checkbox" class="form-check-input kid-check" data-id="${escapeHtml(p.id)}" ${mine ? "checked" : ""}>
           <span class="flex-grow-1">
             <span>${escapeHtml(p.name)}</span>
-            <span class="meta">${
-              p.isDestructor ? " · ★" : ""
-            }${other ? " · tagad: " + escapeHtml(teamLabel(other)) : ""}</span>
+            <span class="meta">${p.isDestructor ? " · ★" : ""}${other ? " · tagad: " + escapeHtml(teamLabel(other)) : ""}</span>
           </span>
         </label>`;
     }
     list.innerHTML = html || '<p class="text-muted small">Nav rezultātu.</p>';
   }
 
-  function scheduleSave() {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(doSave, SAVE_DEBOUNCE_MS);
+  async function openTeam(code) {
+    const r = await post("/captain/open", { teamId: selectedTeamId, code });
+    teamCode = code;
+    kids = r.kids || [];
+    saveSess();
+    renderKids();
   }
 
-  async function doSave() {
-    saveTimer = null;
-    saveLocal();
-    if (!hasRemote()) {
-      setBadge("bg-secondary", "Lokāli");
-      return;
-    }
-    setBadge("bg-info", "Saglabā…");
+  async function toggleKid(personId, checked) {
     try {
-      await pushRemote();
+      const r = await post("/captain/toggle", { teamId: selectedTeamId, code: teamCode, personId, checked });
+      kids = r.kids || kids;
       setBadge("bg-success", "Saglabāts");
     } catch (err) {
-      console.warn(err);
-      setBadge("bg-danger", "Kļūda saglabājot");
+      alert(err.message);
+      setBadge("bg-danger", "Kļūda");
     }
-  }
-
-  function toggleKid(personId, checked) {
-    const p = peopleCache.find((x) => x.id === personId);
-    if (!p || p.type !== "participant" || !selectedTeamId) return;
-
-    if (checked) {
-      // Remove from previous team's participantIds if any
-      if (p.teamId && p.teamId !== selectedTeamId) {
-        const prev = teamsCache.find((t) => t.id === p.teamId);
-        if (prev) {
-          prev.participantIds = (prev.participantIds || []).filter(
-            (id) => id !== p.id
-          );
-        }
-      }
-      p.teamId = selectedTeamId;
-      const team = teamsCache.find((t) => t.id === selectedTeamId);
-      if (team) {
-        if (!team.participantIds) team.participantIds = [];
-        if (!team.participantIds.includes(p.id)) team.participantIds.push(p.id);
-      }
-    } else {
-      if (p.teamId === selectedTeamId) {
-        p.teamId = null;
-        const team = teamsCache.find((t) => t.id === selectedTeamId);
-        if (team) {
-          team.participantIds = (team.participantIds || []).filter(
-            (id) => id !== p.id
-          );
-        }
-      }
-    }
-    scheduleSave();
     renderKids();
   }
 
@@ -340,78 +178,91 @@
     showState("state-loading");
     setBadge("bg-info", "Ielādē…");
     try {
-      if (hasRemote()) {
-        const data = await fetchRemote();
-        applyPayload(data);
-        saveLocal();
-        setBadge("bg-success", "Sinhronizēts");
-      } else {
-        applyPayload(loadLocal());
-        setBadge("bg-secondary", "Lokāli");
-      }
+      const r = await get("/captain");
+      phase = r.phase;
+      teams = r.teams || [];
     } catch (err) {
       console.warn(err);
-      applyPayload(loadLocal());
-      if (!peopleCache.length && !teamsCache.length) {
-        $("#error-text").textContent = String(err.message || err);
-        showState("state-error");
-        setBadge("bg-danger", "Kļūda");
-        return;
-      }
-      setBadge("bg-warning", "Lokālā kopija");
-    }
-
-    if (settingsCache.phase !== "names") {
-      showState("state-closed");
+      $("#error-text").textContent = "Neizdevās savienoties ar serveri. Pārbaudiet internetu.";
+      showState("state-error");
+      setBadge("bg-danger", "Kļūda");
       return;
     }
-
+    if (phase !== "names") {
+      showState("state-closed");
+      setBadge("bg-secondary", "Slēgts");
+      return;
+    }
     showState("state-open");
+    setBadge("bg-success", "Sinhronizēts");
+
+    if (!restored) {
+      restored = true;
+      try {
+        const s = JSON.parse(sessionStorage.getItem(SESS_KEY) || "null");
+        if (s && teams.some((t) => t.id === s.teamId)) {
+          selectedTeamId = s.teamId;
+          await openTeam(s.code);
+        }
+      } catch (_) {
+        selectedTeamId = null;
+        teamCode = null;
+        saveSess();
+      }
+    }
     fillTeams();
     renderKids();
   }
 
   function bind() {
-    $("#team-select") &&
-      $("#team-select").addEventListener("change", (e) => {
-        selectedTeamId = e.target.value || null;
+    $("#team-select").addEventListener("change", async (e) => {
+      const sel = e.target;
+      const id = sel.value || null;
+      selectedTeamId = null;
+      teamCode = null;
+      kids = [];
+      saveSess();
+      $("#class-filter").innerHTML = '<option value="">Visas klases</option>';
+      renderKids();
+      if (!id) return;
+      const code = prompt("Ievadi savas komandas kodu:");
+      if (!code) { sel.value = ""; return; }
+      try {
+        selectedTeamId = id;
+        await openTeam(code);
+      } catch (err) {
+        alert(err.message);
+        selectedTeamId = null;
+        sel.value = "";
         renderKids();
-      });
-    $("#kid-search") &&
-      $("#kid-search").addEventListener("input", renderKids);
-    $("#class-filter") &&
-      $("#class-filter").addEventListener("change", renderKids);
-    $("#btn-retry-closed") &&
-      $("#btn-retry-closed").addEventListener("click", load);
-    $("#btn-retry-error") &&
-      $("#btn-retry-error").addEventListener("click", load);
+      }
+    });
+    $("#kid-search").addEventListener("input", renderKids);
+    $("#class-filter").addEventListener("change", renderKids);
+    $("#btn-retry-closed").addEventListener("click", load);
+    $("#btn-retry-error").addEventListener("click", load);
 
     document.addEventListener("change", (e) => {
       const t = e.target;
-      if (t && t.classList && t.classList.contains("kid-check")) {
-        toggleKid(t.dataset.id, t.checked);
-      }
+      if (t && t.classList && t.classList.contains("kid-check")) toggleKid(t.dataset.id, t.checked);
     });
 
-    // Periodic refresh to see other captains' changes
     setInterval(async () => {
-      if (settingsCache.phase !== "names") return;
       if (document.hidden) return;
       try {
-        if (hasRemote()) {
-          const data = await fetchRemote();
-          applyPayload(data);
-          if (settingsCache.phase !== "names") {
-            showState("state-closed");
-            return;
-          }
-          fillTeams();
+        const r = await get("/captain");
+        const wasOpen = phase === "names";
+        phase = r.phase;
+        if (phase !== "names") { showState("state-closed"); return; }
+        if (!wasOpen) { load(); return; }
+        teams = r.teams || teams;
+        if (selectedTeamId && teamCode) {
+          const o = await post("/captain/open", { teamId: selectedTeamId, code: teamCode });
+          kids = o.kids || kids;
           renderKids();
-          setBadge("bg-success", "Sinhronizēts");
         }
-      } catch (_) {
-        /* ignore */
-      }
+        setBadge("bg-success", "Sinhronizēts");
+      } catch (_) { /* ignore */ }
     }, 15000);
   }
 

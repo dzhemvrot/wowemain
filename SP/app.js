@@ -41,6 +41,7 @@
     set_cv: "Atzīmēja CV",
     quorum_override: "Turpināja bez kvoruma",
     export_absence_csv: "Eksportēja apmeklējuma riska CSV",
+	reset_codes: "Atjaunoja kodus",
   };
 
   const MIN_PASSWORD_LEN = 8;
