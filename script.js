@@ -100,6 +100,7 @@ const NAVBAR_HTML = () => {
     </button>
     <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
       <div class="navbar-nav me-auto">
+        <a class="nav-link" href="${base}projects.html" data-key="nav-projects">Projects</a>
         <a class="nav-link" href="${base}faq.html" data-key="nav-faq">FAQ</a>
         <a class="nav-link" href="${base}thoughts.html" data-key="Thoughtslink">Thoughts</a>
         <a class="nav-link" href="${base}saieti/games.html">Saieti</a>
