@@ -15,6 +15,10 @@ function changeLanguage(lang) {
     }
   });
 
+  if (translations[lang]['projects-page-title']) {
+    document.title = translations[lang]['projects-page-title'];
+  }
+
   // Mark active language button
   document.querySelectorAll('.lang-btn').forEach(btn => {
     const isActive = btn.dataset.lang === lang;
@@ -80,9 +84,6 @@ function currentAge() {
 
 // Path-aware base for pages in subfolders
 function siteBase() {
-  const path = window.location.pathname.replace(/\/[^/]*$/, '/');
-  // If we're in a subfolder of the site root (e.g. /saieti/), go up
-  // For main pages (index, faq, thoughts) base is ''
   if (/\/(saieti|msaieti|sp|games|thoughts)\//.test(window.location.pathname)) {
     return '../';
   }
@@ -103,7 +104,6 @@ const NAVBAR_HTML = () => {
         <a class="nav-link" href="${base}projects.html" data-key="nav-projects">Projects</a>
         <a class="nav-link" href="${base}faq.html" data-key="nav-faq">FAQ</a>
         <a class="nav-link" href="${base}thoughts.html" data-key="Thoughtslink">Thoughts</a>
-        <a class="nav-link" href="${base}saieti/games.html">Saieti</a>
       </div>
       <div class="navbar-nav" role="group" aria-label="Language">
         <a class="nav-link lang-btn" href="#" data-lang="en" role="button" aria-label="English">EN</a>

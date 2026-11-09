@@ -3,196 +3,75 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Project portfolio of Timurs Besarabs (wowemain): web apps, games, school tools and experiments.">
-  <meta name="keywords" content="wowemain projects, timurs besarabs projects, saieti, alliance, tool projects, school tools">
+  <meta name="description" content="Projects and tools by Timurs Besarabs, including games, event tools and writing.">
+  <meta name="keywords" content="wowemain projects, Timurs Besarabs, Saieti, Alliance, web projects">
   <meta name="language" content="en, ru, lv">
   <meta name="date" content="Nov. 9, 2026">
   <meta property="og:title" content="wowemain's page - Projects">
-  <meta property="og:description" content="Tools, games, and side projects by Timurs Besarabs.">
-  <meta property="og:url" content="https://wowe-main.eu/projects.html">
+  <meta property="og:description" content="A few things I have made: web tools, games, and writing.">
+  <meta property="og:url" content="https://wowe-main.eu/projects">
   <meta property="og:image" content="https://wowe-main.eu/images/tbesarabs_022026.JPG">
   <meta name="theme-color" content="#841414">
   <title>wowemain's page - Projects</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
   <link rel="stylesheet" type="text/css" href="style.css">
-  <style>
-    .project-card {
-      height: 100%;
-      border: 1px solid rgba(132, 20, 20, 0.15);
-      border-radius: 1rem;
-      background: linear-gradient(180deg, #ffffff 0%, #fff9f9 100%);
-      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
-      padding: 1.25rem;
-      position: relative;
-      overflow: hidden;
-    }
-    .project-card::before {
-      content: "";
-      position: absolute;
-      inset: 0 auto auto 0;
-      width: 100%;
-      height: 4px;
-      background: linear-gradient(90deg, #841414, #c43a3a);
-    }
-    .project-badge {
-      display: inline-block;
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      padding: 0.35rem 0.7rem;
-      border-radius: 999px;
-      margin-bottom: 0.9rem;
-    }
-    .status-live { background: #e8f7ee; color: #0f5132; }
-    .status-internal { background: #fff3cd; color: #664d03; }
-    .status-experimental { background: #e7f1ff; color: #084298; }
-    .project-card h2 {
-      font-size: 1.45rem;
-      margin-bottom: 0.75rem;
-    }
-    .project-card p {
-      color: #4b5563;
-      margin-bottom: 0.75rem;
-    }
-    .project-card ul {
-      padding-left: 1.1rem;
-      margin-bottom: 1rem;
-      color: #374151;
-    }
-    .project-card li + li {
-      margin-top: 0.35rem;
-    }
-    .project-card .btn {
-      min-width: 100px;
-    }
-    .project-link {
-      color: #841414;
-      text-decoration: none;
-      font-weight: 600;
-    }
-    .project-link:hover {
-      text-decoration: underline;
-    }
-  </style>
 </head>
 <body>
   <div id="site-navbar"></div>
 
-  <div class="container py-4">
-    <div class="row justify-content-center">
-      <div class="col-lg-10">
-        <div class="card shadow-sm border-0">
-          <div class="card-body p-4 p-md-5">
-            <h1 class="mb-3">Projects</h1>
-            <p class="lead mb-4">A quick overview of the tools, games, and side projects I’ve built and kept working on.</p>
+  <div class="row p-4 justify-content-center">
+    <div class="col col-lg-10 justify-content-center">
+      <div class="card">
+        <div class="card-body">
+          <h1 class="h5 card-title" data-key="projects-title">Projects</h1>
+          <p class="card-text" data-key="projects-intro">A few things I have made, from small tools to games.</p>
+          <hr>
 
-            <div class="row g-4">
-              <div class="col-md-6">
-                <div class="project-card">
-                  <span class="project-badge status-live">Live</span>
-                  <h2>Saieti</h2>
-                  <p>A bilingual catalogue and randomizer for icebreakers, teambuilding activities, and energizers.</p>
-                  <ul>
-                    <li>LV/RU catalog with filters and categories</li>
-                    <li>Random game picker for events and classes</li>
-                    <li>Built as a lightweight browser app</li>
-                  </ul>
-                  <div class="d-flex flex-wrap gap-2">
-                    <a href="saieti/games.html" class="btn btn-primary btn-sm">Open</a>
-                    <a href="https://github.com/dzhemvrot/wowemain/tree/main/saieti" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">Source</a>
-                  </div>
-                </div>
-              </div>
+          <section class="mb-4">
+            <h2 class="h6 card-title" data-key="project-saieti-title">Saieti</h2>
+            <p class="card-text" data-key="project-saieti-description">A Latvian and Russian catalogue of icebreaker and team-building games, with a randomizer to pick an activity.</p>
+            <a href="saieti/games.html" class="btn btn-outline-primary btn-sm" data-key="project-open">Open</a>
+          </section>
+          <hr>
 
-              <div class="col-md-6">
-                <div class="project-card">
-                  <span class="project-badge status-live">Live</span>
-                  <h2>Alliance</h2>
-                  <p>A multiplayer tank-turn tactics web game with lobby creation and private messaging between players.</p>
-                  <ul>
-                    <li>Turn-based battles and strategic positioning</li>
-                    <li>Match setup and lobby flow</li>
-                    <li>Private DM communication between players</li>
-                  </ul>
-                  <div class="d-flex flex-wrap gap-2">
-                    <a href="games/alliance.html" class="btn btn-primary btn-sm">Open</a>
-                    <a href="https://github.com/dzhemvrot/wowemain/tree/main/games" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">Source</a>
-                  </div>
-                </div>
-              </div>
+          <section class="mb-4">
+            <h2 class="h6 card-title" data-key="project-alliance-title">Alliance</h2>
+            <p class="card-text" data-key="project-alliance-description">A multiplayer, turn-based tank tactics game with lobbies and private messages.</p>
+            <a href="games/alliance.html" class="btn btn-outline-primary btn-sm" data-key="project-open">Open</a>
+          </section>
+          <hr>
 
-              <div class="col-md-6">
-                <div class="project-card">
-                  <span class="project-badge status-internal">Internal</span>
-                  <h2>Attendance &amp; voting system</h2>
-                  <p>A school student-council tool for tracking attendance, quorum, and public voting with role-based access.</p>
-                  <ul>
-                    <li>Member management and eligibility logic</li>
-                    <li>Per-day attendance records and CSV export</li>
-                    <li>Voting flows and archive support</li>
-                  </ul>
-                  <div class="d-flex flex-wrap gap-2">
-                    <a href="SP/index.html" class="btn btn-primary btn-sm">Open</a>
-                    <span class="text-muted small align-self-center">School tool</span>
-                  </div>
-                </div>
-              </div>
+          <section class="mb-4">
+            <h2 class="h6 card-title" data-key="project-attendance-title">Student Council attendance and voting</h2>
+            <p class="card-text" data-key="project-attendance-description">A tool for a school student council to record attendance, check quorum, and run votes.</p>
+            <a href="SP/index.html" class="btn btn-outline-primary btn-sm" data-key="project-open">Open</a>
+          </section>
+          <hr>
 
-              <div class="col-md-6">
-                <div class="project-card">
-                  <span class="project-badge status-internal">Internal</span>
-                  <h2>Mazie Radošie saieti</h2>
-                  <p>An organizer panel for managing teams, assigning numbers, scheduling stations, and generating event charts.</p>
-                  <ul>
-                    <li>Team creation and distribution tools</li>
-                    <li>Number assignment and captain workflow</li>
-                    <li>Schedule and chart exports</li>
-                  </ul>
-                  <div class="d-flex flex-wrap gap-2">
-                    <a href="msaieti/index.html" class="btn btn-primary btn-sm">Open</a>
-                    <span class="text-muted small align-self-center">Organizer tool</span>
-                  </div>
-                </div>
-              </div>
+          <section class="mb-4">
+            <h2 class="h6 card-title" data-key="project-gatherings-title">Mazie Radošie saieti</h2>
+            <p class="card-text" data-key="project-gatherings-description">An organizer's panel for setting up teams, assigning participants, and planning activity rotations for a school event.</p>
+            <a href="msaieti/index.html" class="btn btn-outline-primary btn-sm" data-key="project-open">Open</a>
+          </section>
+          <hr>
 
-              <div class="col-md-6">
-                <div class="project-card">
-                  <span class="project-badge status-experimental">Experimental</span>
-                  <h2>Thoughts</h2>
-                  <p>Long-form writing and reflections on topics I care about, especially politics, society, and culture.</p>
-                  <ul>
-                    <li>Essay-style pages</li>
-                    <li>Public writing space</li>
-                    <li>Built to collect ideas over time</li>
-                  </ul>
-                  <div class="d-flex flex-wrap gap-2">
-                    <a href="thoughts.html" class="btn btn-primary btn-sm">Open</a>
-                    <a href="thoughts/polarization.html" class="btn btn-outline-secondary btn-sm">Read</a>
-                  </div>
-                </div>
-              </div>
+          <section class="mb-4">
+            <h2 class="h6 card-title" data-key="project-thoughts-title">Thoughts</h2>
+            <p class="card-text" data-key="project-thoughts-description">A place for my longer writing. There is currently an essay about polarization.</p>
+            <a href="thoughts.html" class="btn btn-outline-primary btn-sm" data-key="project-open">Open</a>
+          </section>
+          <hr>
 
-              <div class="col-md-6">
-                <div class="project-card">
-                  <span class="project-badge status-live">Profile</span>
-                  <h2>Portfolio pages</h2>
-                  <p>This website also serves as a personal portfolio: CV, FAQ, contact information, and project archive.</p>
-                  <ul>
-                    <li>Personal bio and experience</li>
-                    <li>CV and work summary</li>
-                    <li>Contact and social links</li>
-                  </ul>
-                  <div class="d-flex flex-wrap gap-2">
-                    <a href="index.html" class="btn btn-primary btn-sm">Home</a>
-                    <a href="cv.html" class="btn btn-outline-secondary btn-sm">CV</a>
-                    <a href="faq.html" class="btn btn-outline-secondary btn-sm">FAQ</a>
-                  </div>
-                </div>
-              </div>
+          <section>
+            <h2 class="h6 card-title" data-key="project-website-title">This website</h2>
+            <p class="card-text" data-key="project-website-description">My personal page, with a short introduction, work and education history, and contact links.</p>
+            <div class="d-flex flex-wrap gap-2">
+              <a href="index.html" class="btn btn-outline-primary btn-sm" data-key="project-home">Home</a>
+              <a href="cv.html" class="btn btn-outline-primary btn-sm" data-key="project-cv">CV</a>
+              <a href="faq.html" class="btn btn-outline-primary btn-sm" data-key="project-faq">FAQ</a>
             </div>
-          </div>
+          </section>
         </div>
       </div>
     </div>
@@ -200,6 +79,7 @@
 
   <div id="site-footer"></div>
   <script src="i18n.js"></script>
+  <script src="projects-i18n.js"></script>
   <script src="script.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
 </body>
