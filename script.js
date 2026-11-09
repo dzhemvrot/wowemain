@@ -15,6 +15,13 @@ function changeLanguage(lang) {
     }
   });
 
+  // The polarization essay is available in Russian and English. Latvian site
+  // language falls back to English until a Latvian translation is available.
+  const essayLanguage = lang === 'ru' ? 'ru' : 'en';
+  document.querySelectorAll('.essay-language').forEach(article => {
+    article.hidden = article.lang !== essayLanguage;
+  });
+
   if (translations[lang]['projects-page-title']) document.title = translations[lang]['projects-page-title'];
   if (translations[lang]['thoughts-page-title'] && document.body.dataset.page === 'thoughts') document.title = translations[lang]['thoughts-page-title'];
   if (translations[lang]['polarization-page-title'] && document.body.dataset.page === 'polarization') document.title = translations[lang]['polarization-page-title'];
