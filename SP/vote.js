@@ -205,6 +205,8 @@
     const err = $("#ballot-error");
     err.classList.add("d-none");
     if (!selectedMemberId || !pendingChoice) return;
+    const code = prompt("Ievadi savu personīgo kodu, " + memberName(selectedMemberId) + ":");
+    if (!code) return;
     $("#btn-confirm-vote").disabled = true;
     try {
       const res = await fetch(apiUrl("/vote"), {
@@ -214,6 +216,7 @@
           voteId: dataCache.activeVote.id,
           memberId: selectedMemberId,
           choice: pendingChoice,
+          code,
         }),
       });
       const json = await res.json().catch(() => ({}));

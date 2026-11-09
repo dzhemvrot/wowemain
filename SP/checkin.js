@@ -45,11 +45,11 @@
     return res.json();
   }
 
-  async function postCheckIn(dateStr, memberId) {
+  async function postCheckIn(dateStr, memberId, code) {
     const res = await fetch(apiUrl("/checkin"), {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ memberId }),
+      body: JSON.stringify({ memberId, code }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json.ok === false) throw new Error(json.error || "save failed");
@@ -89,22 +89,23 @@
       btn.disabled = already;
       if (!already) {
         btn.addEventListener("click", async () => {
+          const code = prompt("Ievadi savu personīgo kodu, " + m.name + ":");
+          if (!code) return;
           btn.disabled = true;
           btn.textContent = "Saglabā…";
           try {
-            // Re-check session still open
             const fresh = await fetchRemote();
             const s = fresh.publicSession || {};
             if (!s.open || s.date !== dateStr) {
               show("state-closed");
               return;
             }
-            await postCheckIn(dateStr, m.id);
+            await postCheckIn(dateStr, m.id, code);
             $("#done-name").textContent = m.name;
             show("state-done");
           } catch (err) {
             console.warn(err);
-            alert("Neizdevās saglabāt. Mēģini vēlreiz.");
+            alert(err.message || "Neizdevās saglabāt. Mēģini vēlreiz.");
             btn.disabled = false;
             btn.textContent = m.name;
           }

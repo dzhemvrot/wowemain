@@ -2427,6 +2427,56 @@
     }
   }
 
+  // ---------- Personal codes (admin) ----------
+  function renderCodes(list) {
+    $("#codes-box").classList.remove("d-none");
+    $("#btn-print-codes").classList.remove("d-none");
+    $("#btn-reset-all-codes").classList.remove("d-none");
+    $("#codes-body").innerHTML = list
+      .map(
+        (c) =>
+          "<tr><td>" + escapeHtml(c.name) + "</td>" +
+          '<td><code class="fs-6">' + escapeHtml(c.code) + "</code></td>" +
+          '<td class="text-end"><button type="button" class="btn btn-outline-warning btn-sm btn-reset-code" data-id="' +
+          escapeHtml(c.id) + '">Jauns kods</button></td></tr>'
+      )
+      .join("");
+  }
+
+  async function showCodes() {
+    try {
+      renderCodes((await api("/codes", {})).codes);
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function resetCodes(body, question) {
+    if (!confirm(question)) return;
+    try {
+      renderCodes((await api("/codes/reset", body)).codes);
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  function printCodes() {
+    const rows = [...document.querySelectorAll("#codes-body tr")]
+      .map(
+        (tr) =>
+          "<tr><td>" + tr.cells[0].innerHTML + '</td><td style="font-family:monospace;font-size:20px">' +
+          tr.cells[1].textContent + "</td></tr>"
+      )
+      .join("");
+    const w = window.open("", "_blank");
+    w.document.write(
+      "<html><head><title>Kodi</title></head><body><h3>Personīgie kodi</h3>" +
+        '<table border="1" cellpadding="8" cellspacing="0">' + rows + "</table></body></html>"
+    );
+    w.document.close();
+    w.print();
+  }
+
   // ---------- Init ----------
   function init() {
     $("#btn-login").addEventListener("click", tryLogin);
@@ -2588,6 +2638,18 @@
     $("#btn-change-own-pass").addEventListener("click", () => changeOwnPassword());
     $("#btn-admin-set-pass").addEventListener("click", () => adminSetPassword());
     $("#btn-admin-set-pass-cancel").addEventListener("click", hideAdminSetPass);
+
+    if ($("#btn-show-codes")) {
+      $("#btn-show-codes").addEventListener("click", showCodes);
+      $("#btn-print-codes").addEventListener("click", printCodes);
+      $("#btn-reset-all-codes").addEventListener("click", () =>
+        resetCodes({ all: true }, "Izveidot jaunus kodus VISIEM? Vecie kodi pārstās darboties.")
+      );
+      $("#codes-body").addEventListener("click", (e) => {
+        const b = e.target.closest(".btn-reset-code");
+        if (b) resetCodes({ id: b.dataset.id }, "Izveidot jaunu kodu šai personai?");
+      });
+    }
 
     currentUser = loadSession();
     if (currentUser) showApp();

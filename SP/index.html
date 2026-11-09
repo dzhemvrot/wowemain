@@ -502,6 +502,25 @@
           </div>
         </div>
 
+        <div class="card shadow-sm mb-4 admin-only d-none">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <h2 class="h5 mb-0">Personīgie kodi</h2>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btn-show-codes">Rādīt kodus</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="btn-print-codes">Drukāt</button>
+                <button type="button" class="btn btn-outline-danger btn-sm d-none" id="btn-reset-all-codes">Jauni kodi visiem</button>
+              </div>
+            </div>
+            <p class="small text-muted mb-2">Katrs dalībnieks izmanto savu kodu reģistrācijai un balsošanai. Nodod kodu katram privāti.</p>
+            <div id="codes-box" class="table-responsive d-none">
+              <table class="table table-sm align-middle mb-0">
+                <tbody id="codes-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div class="card shadow-sm mb-4">
           <div class="card-body">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
