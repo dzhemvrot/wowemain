@@ -15,18 +15,16 @@ function changeLanguage(lang) {
     }
   });
 
-  if (translations[lang]['projects-page-title']) {
-    document.title = translations[lang]['projects-page-title'];
-  }
+  if (translations[lang]['projects-page-title']) document.title = translations[lang]['projects-page-title'];
+  if (translations[lang]['thoughts-page-title'] && document.body.dataset.page === 'thoughts') document.title = translations[lang]['thoughts-page-title'];
+  if (translations[lang]['polarization-page-title'] && document.body.dataset.page === 'polarization') document.title = translations[lang]['polarization-page-title'];
 
-  // Mark active language button
   document.querySelectorAll('.lang-btn').forEach(btn => {
     const isActive = btn.dataset.lang === lang;
     btn.classList.toggle('active', isActive);
     btn.setAttribute('aria-current', isActive ? 'true' : 'false');
   });
 
-  // Refresh dynamic content
   const setIfExists = (id, value) => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = value;
@@ -39,15 +37,10 @@ function changeLanguage(lang) {
 function daysUntilSummer() {
   const today = new Date();
   const year = today.getFullYear();
-  let summerStart = new Date(year, 5, 1); // June 1
-  const summerEnd = new Date(year, 7, 31); // July 31
-
-  if (today >= summerStart && today <= summerEnd) {
-    return translations[currentLang]['summer-now'];
-  }
-  if (today > summerEnd) {
-    summerStart = new Date(year + 1, 5, 1);
-  }
+  let summerStart = new Date(year, 5, 1);
+  const summerEnd = new Date(year, 7, 31);
+  if (today >= summerStart && today <= summerEnd) return translations[currentLang]['summer-now'];
+  if (today > summerEnd) summerStart = new Date(year + 1, 5, 1);
   const diffDays = Math.ceil((summerStart - today) / (1000 * 60 * 60 * 24));
   return translations[currentLang]['summer-countdown'].replace('{days}', diffDays);
 }
@@ -55,14 +48,9 @@ function daysUntilSummer() {
 function daysUntilBDay() {
   const today = new Date();
   const year = today.getFullYear();
-  let BDay = new Date(year, 5, 30); // June 30
-
-  if (today.getMonth() === 5 && today.getDate() === 30) {
-    return translations[currentLang]['bday-today'];
-  }
-  if (today > BDay) {
-    BDay = new Date(year + 1, 5, 30);
-  }
+  let BDay = new Date(year, 5, 30);
+  if (today.getMonth() === 5 && today.getDate() === 30) return translations[currentLang]['bday-today'];
+  if (today > BDay) BDay = new Date(year + 1, 5, 30);
   const diffDays = Math.ceil((BDay - today) / (1000 * 60 * 60 * 24));
   return translations[currentLang]['bday-countdown'].replace('{days}', diffDays);
 }
@@ -70,23 +58,15 @@ function daysUntilBDay() {
 function currentAge() {
   const dob = new Date('2007-06-30');
   const age_dt = new Date(Date.now() - dob.getTime());
-  let age = Math.abs(age_dt.getUTCFullYear() - 1970);
+  const age = Math.abs(age_dt.getUTCFullYear() - 1970);
   const willbe = new Date().getFullYear() - 2007;
-
   let returntext = translations[currentLang]['age-current'].replace('{age}', age);
-  if (willbe !== age) {
-    returntext += translations[currentLang]['age-will-be'].replace('{willbe}', willbe);
-  } else {
-    returntext += '. ';
-  }
+  returntext += willbe !== age ? translations[currentLang]['age-will-be'].replace('{willbe}', willbe) : '. ';
   return returntext;
 }
 
-// Path-aware base for pages in subfolders
 function siteBase() {
-  if (/\/(saieti|msaieti|sp|games|thoughts)\//.test(window.location.pathname)) {
-    return '../';
-  }
+  if (/\/(saieti|msaieti|sp|games|thoughts)\//.test(window.location.pathname)) return '../';
   return '';
 }
 
@@ -102,6 +82,7 @@ const NAVBAR_HTML = () => {
     <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
       <div class="navbar-nav me-auto">
         <a class="nav-link" href="${base}projects.html" data-key="nav-projects">Projects</a>
+        <a class="nav-link" href="${base}cv.html" data-key="nav-cv">CV</a>
         <a class="nav-link" href="${base}faq.html" data-key="nav-faq">FAQ</a>
         <a class="nav-link" href="${base}thoughts.html" data-key="Thoughtslink">Thoughts</a>
       </div>
@@ -117,33 +98,23 @@ const NAVBAR_HTML = () => {
 
 function loadNavbar() {
   const placeholder = document.getElementById('site-navbar');
-  if (!placeholder) return;
-  placeholder.innerHTML = NAVBAR_HTML();
+  if (placeholder) placeholder.innerHTML = NAVBAR_HTML();
 }
 
 const FOOTER_HTML = `
 <footer class="bg-body-tertiary py-4 mt-5 border-top">
   <div class="container text-center text-muted small">
     <p class="mb-1" data-key="footer-author">Page author: Timurs Besarabs, 2025–2026</p>
-    <p class="mb-1" data-key="footer-license">
-      All material on this domain, including subdomains, is licensed under
-      <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener" class="text-reset">CC BY-SA 4.0</a>,
-      unless stated otherwise.
-    </p>
-    <p class="mb-0" data-key="footer-contact">
-      Contact e-mail:
-      <a href="mailto:tbesarabs@gmail.com" class="text-reset">tbesarabs@gmail.com</a>
-    </p>
+    <p class="mb-1" data-key="footer-license">All material on this domain, including subdomains, is licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener" class="text-reset">CC BY-SA 4.0</a>, unless stated otherwise.</p>
+    <p class="mb-0" data-key="footer-contact">Contact e-mail: <a href="mailto:tbesarabs@gmail.com" class="text-reset">tbesarabs@gmail.com</a></p>
   </div>
 </footer>`;
 
 function loadFooter() {
   const placeholder = document.getElementById('site-footer');
-  if (!placeholder) return;
-  placeholder.innerHTML = FOOTER_HTML;
+  if (placeholder) placeholder.innerHTML = FOOTER_HTML;
 }
 
-// Tiny privacy-friendly visit counter (local only, no third-party)
 function bumpLocalVisitCounter() {
   try {
     const key = 'wowemain-visits';
@@ -156,22 +127,18 @@ document.addEventListener('DOMContentLoaded', () => {
   loadNavbar();
   loadFooter();
   bumpLocalVisitCounter();
-
   document.querySelectorAll('.lang-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', e => {
       e.preventDefault();
       changeLanguage(btn.dataset.lang);
     });
-    // Keyboard: Enter/Space already activate links; ensure focus style
-    btn.addEventListener('keydown', (e) => {
+    btn.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         changeLanguage(btn.dataset.lang);
       }
     });
   });
-
   const savedLang = localStorage.getItem('lang');
-  const initialLang = (savedLang && translations[savedLang]) ? savedLang : 'en';
-  changeLanguage(initialLang);
+  changeLanguage(savedLang && translations[savedLang] ? savedLang : 'en');
 });

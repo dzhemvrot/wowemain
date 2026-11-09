@@ -13,11 +13,6 @@ Object.assign(translations.en, {
   "project-gatherings-description": "An organizer's panel for setting up teams, assigning participants, and planning activity rotations for a school event.",
   "project-thoughts-title": "Thoughts",
   "project-thoughts-description": "A place for my longer writing. There is currently an essay about polarization.",
-  "project-website-title": "This website",
-  "project-website-description": "My personal page, with a short introduction, work and education history, and contact links.",
-  "project-home": "Home",
-  "project-cv": "CV",
-  "project-faq": "FAQ",
   "projects-page-title": "wowemain's page - Projects"
 });
 
@@ -35,11 +30,6 @@ Object.assign(translations.lv, {
   "project-gatherings-description": "Organizatoru panelis komandu veidošanai, dalībnieku sadalei un aktivitāšu rotācijas plānošanai skolas pasākumā.",
   "project-thoughts-title": "Domājumi",
   "project-thoughts-description": "Vieta maniem garākiem tekstiem. Pašlaik tur ir eseja par polarizāciju.",
-  "project-website-title": "Šī vietne",
-  "project-website-description": "Mana personīgā lapa ar īsu aprakstu, darba un izglītības gaitām, kā arī kontaktinformāciju.",
-  "project-home": "Sākums",
-  "project-cv": "CV",
-  "project-faq": "BUJ",
   "projects-page-title": "wowemain lapa — Projekti"
 });
 
@@ -57,10 +47,5 @@ Object.assign(translations.ru, {
   "project-gatherings-description": "Панель организатора для создания команд, распределения участников и планирования ротации активностей на школьном мероприятии.",
   "project-thoughts-title": "Мысли",
   "project-thoughts-description": "Место для моих длинных текстов. Сейчас там есть эссе о поляризации.",
-  "project-website-title": "Этот сайт",
-  "project-website-description": "Моя личная страница с кратким описанием, опытом работы и учёбы, а также контактами.",
-  "project-home": "Главная",
-  "project-cv": "Резюме",
-  "project-faq": "ЧАВО",
   "projects-page-title": "Страница wowemain — Проекты"
 });
