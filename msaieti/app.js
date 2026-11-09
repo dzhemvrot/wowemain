@@ -29,6 +29,7 @@
     phase_names: "Ieslēdza 2. posmu (vārdi)",
     captain_assign: "Kapitāns piešķīra bērnu",
     reset_codes: "Atjaunoja kodus",
+	restore_backup: "Atjaunoja datus no kopijas",
   };
 
   const TYPE_LABELS = {
@@ -86,43 +87,6 @@
       throw e;
     }
     return json;
-  }
-
-  // ---------- Password hashing (SHA-256 + salt) ----------
-  function randomSalt() {
-    const arr = new Uint8Array(16);
-    crypto.getRandomValues(arr);
-    return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
-  }
-
-  async function sha256Hex(text) {
-    const data = new TextEncoder().encode(text);
-    const buf = await crypto.subtle.digest("SHA-256", data);
-    return Array.from(new Uint8Array(buf), (b) =>
-      b.toString(16).padStart(2, "0")
-    ).join("");
-  }
-
-  async function hashPassword(password, salt) {
-    return sha256Hex(salt + password);
-  }
-
-  async function verifyUserPassword(user, password) {
-    if (!user) return false;
-    if (user.password != null && user.password !== "" && !user.passwordHash) {
-      return user.password === password;
-    }
-    if (!user.passwordHash || !user.salt) return false;
-    const h = await hashPassword(password, user.salt);
-    return h === user.passwordHash;
-  }
-
-  async function setUserPasswordFields(user, newPassword) {
-    const salt = randomSalt();
-    const passwordHash = await hashPassword(newPassword, salt);
-    user.salt = salt;
-    user.passwordHash = passwordHash;
-    delete user.password;
   }
 
   function isMainAdmin(user) {
@@ -186,7 +150,6 @@
     switchTab("tab-teams");
     updateSyncBadge();
     await loadFromRemoteOrLocal();
-    ensureSeedUsers();
     renderAll();
   }
 
@@ -194,9 +157,6 @@
   function hasRemote() {
     return typeof REMOTE_URL === "string" && REMOTE_URL.trim().length > 10;
   }
-
-  function loadLocal() { return {}; }
-  function saveLocal() {}
 
   function applyPayload(data) {
     if (!data || typeof data !== "object") return;
@@ -255,39 +215,11 @@
     remoteEnabled = hasRemote();
     syncState = "loading";
     updateSyncBadge();
-    const localBackup = loadLocal();
     try {
-      if (remoteEnabled) {
-        const data = await fetchRemote();
-        applyPayload(data);
-        // If remote has no carousel yet (old deploy), keep local stations
-        if (
-          (!data.carousel ||
-            !Array.isArray(data.carousel.stations) ||
-            !data.carousel.stations.length) &&
-          localBackup.carousel &&
-          Array.isArray(localBackup.carousel.stations) &&
-          localBackup.carousel.stations.length
-        ) {
-          carouselCache = {
-            startTime: localBackup.carousel.startTime || carouselCache.startTime,
-            endTime: localBackup.carousel.endTime || carouselCache.endTime,
-            transitionMin:
-              localBackup.carousel.transitionMin != null
-                ? localBackup.carousel.transitionMin
-                : carouselCache.transitionMin,
-            stations: localBackup.carousel.stations.map(normalizeStation),
-          };
-        }
-        saveLocal();
-        syncState = "ok";
-      } else {
-        applyPayload(localBackup);
-        syncState = "local";
-      }
+      applyPayload(await fetchRemote());
+      syncState = "ok";
     } catch (err) {
-      console.warn("Remote load failed, using local", err);
-      applyPayload(localBackup);
+      console.warn("Remote load failed", err);
       syncState = "error";
     }
     updateSyncBadge();
@@ -338,8 +270,6 @@
     el.className = "badge sync-badge ms-1 " + cls;
     el.textContent = text;
   }
-
-  function ensureSeedUsers() {}
 
   // ---------- Logs ----------
   function addLog(action, detail) {
@@ -3118,6 +3048,15 @@
         if (b) resetCodes({ id: b.dataset.id }, "Izveidot jaunu kodu šai komandai?");
       });
     }
+    if ($("#btn-backup-download")) {
+      $("#btn-backup-download").addEventListener("click", downloadBackup);
+      $("#btn-backup-restore").addEventListener("click", () => $("#backup-file").click());
+      $("#backup-file").addEventListener("change", (e) => {
+        const f = e.target.files && e.target.files[0];
+        e.target.value = "";
+        restoreBackup(f);
+      });
+    }
   }
 
   // ---------- Team codes ----------
@@ -3156,6 +3095,57 @@
     w.document.write('<html><head><title>Kodi</title></head><body><h3>Komandu kodi</h3><table border="1" cellpadding="8" cellspacing="0">' + rows + "</table></body></html>");
     w.document.close();
     w.print();
+  }
+
+  // ---------- Auto refresh ----------
+  function startAutoRefresh() {
+    setInterval(async () => {
+      if (!currentUser || document.hidden || saving || saveTimer) return;
+      if (document.querySelector(".modal.show")) return;
+      const a = document.activeElement;
+      if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return; // don't disturb typing
+      try {
+        const r = await fetchRemote();
+        if (saving || saveTimer) return; // user changed something meanwhile
+        if (typeof r.rev === "number" && r.rev !== dataRev) {
+          applyPayload(r);
+          renderAll();
+          syncState = "ok";
+          updateSyncBadge();
+        }
+      } catch (_) { /* ignore */ }
+    }, 15000);
+  }
+
+  // ---------- Backup ----------
+  async function downloadBackup() {
+    try {
+      const r = await api("/backup", {});
+      const blob = new Blob([JSON.stringify(r.backup, null, 1)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "msaieti-rezerves-kopija-" + stamp() + ".json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function restoreBackup(file) {
+    if (!file) return;
+    if (!confirm("Atjaunot VISUS datus no faila? Pašreizējie dati tiks aizvietoti.")) return;
+    try {
+      const backup = JSON.parse(await file.text());
+      await api("/restore", { backup });
+      alert("Atjaunots. Lapa tiks pārlādēta.");
+      location.reload();
+    } catch (e) {
+      alert(e.message);
+    }
   }
 
   // ---------- Init ----------

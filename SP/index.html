@@ -618,7 +618,18 @@
             </div>
           </div>
         </div>
-
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <h2 class="h5 mb-2">Rezerves kopija</h2>
+            <p class="small text-muted">Fails satur visus datus, tostarp paroļu hešus un IP adreses. Glabā drošā vietā un izdzēs, kad vairs nevajag.</p>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btn-backup-download">⬇ Lejupielādēt kopiju</button>
+              <button type="button" class="btn btn-outline-danger btn-sm" id="btn-backup-restore">Atjaunot no faila…</button>
+              <input type="file" id="backup-file" accept=".json,application/json" class="d-none">
+            </div>
+            <p class="small text-muted mt-2 mb-0">Atjaunot var tikai galvenais konts «admin». Serveris arī katru nakti pats saglabā kopiju.</p>
+          </div>
+        </div>
         <!-- Admin set password modal-ish card -->
         <div class="card shadow-sm mb-4 d-none" id="admin-set-pass-card">
           <div class="card-body">

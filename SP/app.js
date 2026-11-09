@@ -42,6 +42,7 @@
     quorum_override: "Turpināja bez kvoruma",
     export_absence_csv: "Eksportēja apmeklējuma riska CSV",
 	reset_codes: "Atjaunoja kodus",
+	restore_backup: "Atjaunoja datus no kopijas",
   };
 
   const MIN_PASSWORD_LEN = 8;
@@ -51,6 +52,9 @@
   let adminSetPassTargetId = null;
   
   let pendingLogs = [];
+  let attendanceBase = {};
+  let loadedOk = false;
+  const cloneJson = (x) => JSON.parse(JSON.stringify(x));
 
   function apiUrl(path) {
     return REMOTE_URL.trim().replace(/\/+$/, "") + path;
@@ -71,44 +75,6 @@
     }
     if (!json || json.ok === false) throw new Error((json && json.error) || "HTTP " + res.status);
     return json;
-  }
-
-  // ---------- Password hashing (SHA-256 + salt) ----------
-  function randomSalt() {
-    const arr = new Uint8Array(16);
-    crypto.getRandomValues(arr);
-    return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
-  }
-
-  async function sha256Hex(text) {
-    const data = new TextEncoder().encode(text);
-    const buf = await crypto.subtle.digest("SHA-256", data);
-    return Array.from(new Uint8Array(buf), (b) =>
-      b.toString(16).padStart(2, "0")
-    ).join("");
-  }
-
-  async function hashPassword(password, salt) {
-    return sha256Hex(salt + password);
-  }
-
-  async function verifyUserPassword(user, password) {
-    if (!user) return false;
-    // Legacy plain-text (migrate on successful login)
-    if (user.password != null && user.password !== "" && !user.passwordHash) {
-      return user.password === password;
-    }
-    if (!user.passwordHash || !user.salt) return false;
-    const h = await hashPassword(password, user.salt);
-    return h === user.passwordHash;
-  }
-
-  async function setUserPasswordFields(user, newPassword) {
-    const salt = randomSalt();
-    const passwordHash = await hashPassword(newPassword, salt);
-    user.salt = salt;
-    user.passwordHash = passwordHash;
-    delete user.password;
   }
 
   function isMainAdmin(user) {
@@ -190,8 +156,6 @@
     $("#date-input").value = today;
     updateSyncBadge();
     await loadFromRemoteOrLocal();
-    ensureSeedUsers();
-    await migrateLegacyPasswordsInStore();
     renderMembersList();
     fillHistorySelect();
     updatePublicSessionUI();
@@ -240,28 +204,6 @@
     $("#username-input").value = "";
     $("#password-input").value = "";
     showApp();
-  }
-
-  /** Public IP via external lookup (browser cannot read it locally). */
-  async function fetchClientIp() {
-    const endpoints = [
-      "https://api.ipify.org?format=json",
-      "https://api64.ipify.org?format=json",
-    ];
-    for (const url of endpoints) {
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 4000);
-        const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
-        clearTimeout(t);
-        if (!res.ok) continue;
-        const data = await res.json();
-        if (data && data.ip) return String(data.ip);
-      } catch (_) {
-        /* try next */
-      }
-    }
-    return null;
   }
 
   function logout() {
@@ -346,6 +288,10 @@
   }
 
   function applyPayload(data) {
+    applyPayloadRaw(data);
+    attendanceBase = cloneJson(attendanceCache); // what the server last told us
+  }
+  function applyPayloadRaw(data) {
     if (!data || typeof data !== "object") {
       membersCache = cloneSeedMembers();
       attendanceCache = {};
@@ -643,31 +589,6 @@
     return seed.map((u) => normalizeUser(u)).filter(Boolean);
   }
 
-  function ensureSeedUsers() {
-    if (!usersCache.length) {
-      usersCache = cloneSeedUsers();
-      scheduleSave();
-      return;
-    }
-    // If store has users but no main admin, merge seed admin if missing
-    const hasAdminName = usersCache.some(
-      (u) => u.username.toLowerCase() === "admin"
-    );
-    if (!hasAdminName) {
-      const seed = cloneSeedUsers();
-      const main = seed.find((u) => u.username.toLowerCase() === "admin");
-      if (main) {
-        usersCache.push(main);
-        scheduleSave();
-      }
-    }
-  }
-
-  /** Strip any leftover plaintext passwords after all users have hashes. */
-  async function migrateLegacyPasswordsInStore() {
-    // Nothing automatic without knowing plaintext; login migrates per-user.
-  }
-
   function newId(prefix) {
     return (
       prefix +
@@ -677,17 +598,6 @@
   }
 
   // ---------- Local / remote ----------
-  function loadLocal() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_DATA) || "null");
-    } catch {
-      return null;
-    }
-  }
-
-  function saveLocal() {
-    localStorage.setItem(STORAGE_DATA, JSON.stringify(payload()));
-  }
 
   function hasRemote() {
     return typeof REMOTE_URL === "string" && REMOTE_URL.trim().length > 10;
@@ -712,8 +622,12 @@
     const body = payload();
     delete body.logs;
     body.newLogs = sending;
+    body.attendanceBase = attendanceBase;
+    const snapshot = cloneJson(attendanceCache);
     try {
-      return await api("/save", body);
+      const r = await api("/save", body);
+      attendanceBase = snapshot;
+      return r;
     } catch (e) {
       pendingLogs = sending.concat(pendingLogs);
       throw e;
@@ -722,39 +636,22 @@
 
   async function loadFromRemoteOrLocal() {
     remoteEnabled = hasRemote();
-    if (!remoteEnabled) {
-      applyPayload(loadLocal());
-      if (!membersCache.length) membersCache = cloneSeedMembers();
-      if (!usersCache.length) usersCache = cloneSeedUsers();
-      syncState = "local";
-      updateSyncBadge();
-      return;
-    }
+    loadedOk = false;
     syncState = "loading";
     updateSyncBadge();
     try {
       applyPayload(await fetchRemote());
-      if (!membersCache.length) membersCache = cloneSeedMembers();
-      if (!usersCache.length) usersCache = cloneSeedUsers();
-      saveLocal();
+      loadedOk = true;
       syncState = "ok";
     } catch (err) {
       console.warn("Remote load failed", err);
-      applyPayload(loadLocal());
-      if (!membersCache.length) membersCache = cloneSeedMembers();
-      if (!usersCache.length) usersCache = cloneSeedUsers();
-      syncState = "error";
+      syncState = "error"; // nothing is saved until a load succeeds
     }
     updateSyncBadge();
   }
 
   function scheduleSave() {
-    saveLocal();
-    if (!remoteEnabled) {
-      syncState = "local";
-      updateSyncBadge();
-      return;
-    }
+    if (!loadedOk) return;
     syncState = "saving";
     updateSyncBadge();
     clearTimeout(saveTimer);
@@ -1431,7 +1328,6 @@
         applyPayload(await fetchRemote());
         if (!membersCache.length) membersCache = cloneSeedMembers();
         if (!usersCache.length) usersCache = cloneSeedUsers();
-        saveLocal();
         syncState = "ok";
         renderMembersList();
         fillHistorySelect();
@@ -2478,8 +2374,40 @@
     w.print();
   }
 
+  // ---------- Backup ----------
+  async function downloadBackup() {
+    try {
+      const r = await api("/backup", {});
+      const blob = new Blob([JSON.stringify(r.backup, null, 1)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "sp-rezerves-kopija-" + toISODate(new Date()) + ".json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function restoreBackup(file) {
+    if (!file) return;
+    if (!confirm("Atjaunot VISUS datus no faila? Pašreizējie dati tiks aizvietoti.")) return;
+    try {
+      const backup = JSON.parse(await file.text());
+      await api("/restore", { backup });
+      alert("Atjaunots. Lapa tiks pārlādēta.");
+      location.reload();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
   // ---------- Init ----------
   function init() {
+    try { localStorage.removeItem(STORAGE_DATA); } catch (_) {}
     $("#btn-login").addEventListener("click", tryLogin);
     $("#password-input").addEventListener("keydown", (e) => {
       if (e.key === "Enter") tryLogin();
@@ -2649,6 +2577,16 @@
       $("#codes-body").addEventListener("click", (e) => {
         const b = e.target.closest(".btn-reset-code");
         if (b) resetCodes({ id: b.dataset.id }, "Izveidot jaunu kodu šai personai?");
+      });
+    }
+
+    if ($("#btn-backup-download")) {
+      $("#btn-backup-download").addEventListener("click", downloadBackup);
+      $("#btn-backup-restore").addEventListener("click", () => $("#backup-file").click());
+      $("#backup-file").addEventListener("change", (e) => {
+        const f = e.target.files && e.target.files[0];
+        e.target.value = "";
+        restoreBackup(f);
       });
     }
 

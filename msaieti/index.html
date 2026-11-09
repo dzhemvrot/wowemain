@@ -435,6 +435,18 @@
           </h2>
           <button type="button" class="btn btn-primary btn-sm" id="btn-add-user">+ Lietotājs</button>
         </div>
+        <div class="card shadow-sm mb-3">
+          <div class="card-body">
+            <h2 class="h6 mb-2">Rezerves kopija</h2>
+            <p class="small text-muted">Fails satur visus datus (arī bērnu vārdus, paroļu hešus, IP adreses). Glabā drošā vietā un izdzēs, kad vairs nevajag.</p>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btn-backup-download">⬇ Lejupielādēt kopiju</button>
+              <button type="button" class="btn btn-outline-danger btn-sm" id="btn-backup-restore">Atjaunot no faila…</button>
+              <input type="file" id="backup-file" accept=".json,application/json" class="d-none">
+            </div>
+            <p class="small text-muted mt-2 mb-0">Atjaunot var tikai galvenais konts «admin».</p>
+          </div>
+        </div>
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle">
             <thead>
@@ -469,6 +481,10 @@
         </div>
       </div>
     </div>
+    <p class="text-center text-muted small mt-4">
+      Drošības nolūkos tiek reģistrēta jūsu IP adrese un darbība. IP adreses redz tikai administratori,
+      tās tiek automātiski dzēstas pēc 90 dienām. Jautājumi: tbesarabs@gmail.com.
+    </p>
   </div>
 
   <!-- MODALS -->
