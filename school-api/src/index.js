@@ -1,6 +1,7 @@
 import { Alliance } from "./alliance.js";
 import { Sp } from "./sp.js";
 import { Msaieti } from "./msaieti.js";
+import { handleNominations } from "./nominations.js";
 export { Alliance, Sp, Msaieti };
 
 const CORS = {
@@ -16,9 +17,11 @@ const reply = (obj, status = 200) =>
 
 export default {
   async fetch(request, env) {
-    if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
-
     const name = new URL(request.url).pathname.replace(/^\/+|\/+$/g, "");
+    if (name.startsWith("nominations/") || name === "nominations") {
+      return handleNominations(request, env);
+    }
+    if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
     if (name.includes("__")) return reply({ ok: false, error: "not found" }, 404); // internal paths
 
     const top = name.split("/")[0];
@@ -31,7 +34,7 @@ export default {
     return ns.get(ns.idFromName("main")).fetch(request);
   },
 
-  // nightly backup to R2 (does nothing if you skipped Step 1)
+  // Nightly backups for existing Durable Object apps. D1 nominations are backed up separately.
   async scheduled(event, env) {
     if (!env.BACKUPS) return;
     const day = new Date().toISOString().slice(0, 10);
