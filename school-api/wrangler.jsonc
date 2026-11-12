@@ -1,0 +1,70 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "school-api",
+	"main": "src/index.js",
+	"compatibility_date": "2026-11-04",
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true,
+	"kv_namespaces": [
+		{
+			"binding": "DB",
+			"id": "2121bcf762e6412bbac7f9a487cb1e84"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "ALLIANCE",
+				"class_name": "Alliance"
+			},
+			{
+				"name": "SP",
+				"class_name": "Sp"
+			},
+			{
+				"name": "MSAIETI",
+				"class_name": "Msaieti"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"Alliance"
+			]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": [
+				"Sp"
+			]
+		},
+		{
+			"tag": "v3",
+			"new_sqlite_classes": [
+				"Msaieti"
+			]
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "BACKUPS",
+			"bucket_name": "school-backups"
+		}
+	],
+	"triggers": {
+		"crons": [
+			"0 3 * * *"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "nominations_db",
+			"database_name": "nominations-db",
+			"database_id": "9ee89850-1361-4187-be02-e8c843dc0376"
+		}
+	]
+}
