@@ -14,9 +14,9 @@
     <div class="container py-4 py-lg-5">
       <section id="login-view" class="login-card card shadow-sm">
         <div class="card-body p-4 p-md-5 text-center">
-          <p class="eyebrow mb-1">Skolas nomināciju sistēma</p>
+          <p class="eyebrow mb-1">Rīgas 22. skolas nomināciju sistēma</p>
           <h1 class="page-title h2 mb-2">Organizatora panelis</h1>
-          <p class="text-muted mb-4">Ienāc ar skolas Microsoft kontu. Organizatoriem jābūt pievienotiem atļauto kontu sarakstam.</p>
+          <p class="text-muted mb-4">Ienāc ar skolas Microsoft kontu.</p>
           <a class="btn btn-primary px-4" href="https://school-api.wmcoeu.workers.dev/nominations/auth/login">Turpināt ar Microsoft</a>
           <p class="small mt-3 mb-0"><a href="vote.html">Esi skolēns? Atvērt balsošanas lapu</a></p>
           <div id="login-error" class="alert alert-danger mt-3 d-none" role="alert"></div>
@@ -85,7 +85,7 @@
               <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
                   <h2 class="h5 mb-0">Klašu saraksti</h2>
-                  <p class="small text-muted mb-0">Tāpat kā «Mazajos saietos»: klases saraksts (Nr. / Uzvārds Vārds), klase faila nosaukumā vai virsrakstā, vai tabula ar klasi un vārdu. Var izvēlēties vairākus failus uzreiz.</p>
+                  <p class="small text-muted mb-0">Klases saraksts (Nr. / Uzvārds Vārds), klase faila nosaukumā vai virsrakstā, vai tabula ar klasi un vārdu. Var izvēlēties vairākus failus uzreiz.</p>
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                   <span class="badge text-bg-light" id="student-count-badge">0 skolēnu</span>
@@ -164,6 +164,7 @@
       </main>
     </div>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-    <script src="app.js"></script>
+    <script src="roster-import.js"></script>
+	<script src="app.js"></script>
   </body>
 </html>
