@@ -18,6 +18,7 @@
           <h1 class="page-title h2 mb-2">Organizatora panelis</h1>
           <p class="text-muted mb-4">Ienāc ar skolas Microsoft kontu. Organizatoriem jābūt pievienotiem atļauto kontu sarakstam.</p>
           <a class="btn btn-primary px-4" href="https://school-api.wmcoeu.workers.dev/nominations/auth/login">Turpināt ar Microsoft</a>
+          <p class="small mt-3 mb-0"><a href="vote.html">Esi skolēns? Atvērt balsošanas lapu</a></p>
           <div id="login-error" class="alert alert-danger mt-3 d-none" role="alert"></div>
         </div>
       </section>
@@ -31,6 +32,7 @@
               <div id="user-label" class="text-muted small mt-1"></div>
             </div>
             <div class="d-flex flex-wrap gap-2">
+              <a class="btn btn-outline-secondary" href="vote.html">Balsot kā skolēns</a>
               <button type="button" class="btn btn-outline-secondary" id="btn-refresh">Atjaunot</button>
               <button type="button" class="btn btn-outline-primary" id="btn-export-csv">Eksportēt CSV</button>
               <button type="button" class="btn btn-outline-danger" id="btn-logout">Iziet</button>
@@ -81,11 +83,14 @@
           <div class="col-lg-8">
             <section class="card shadow-sm mb-4">
               <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <div><h2 class="h5 mb-0">Klašu saraksti</h2><p class="small text-muted mb-0">Failā jābūt kolonnām: vārds, e-pasts (@edu.riga.lv), klase.</p></div>
+                <div>
+                  <h2 class="h5 mb-0">Klašu saraksti</h2>
+                  <p class="small text-muted mb-0">Tāpat kā «Mazajos saietos»: klases saraksts (Nr. / Uzvārds Vārds), klase faila nosaukumā vai virsrakstā, vai tabula ar klasi un vārdu. Var izvēlēties vairākus failus uzreiz.</p>
+                </div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                   <span class="badge text-bg-light" id="student-count-badge">0 skolēnu</span>
                   <label class="btn btn-outline-primary btn-sm mb-0" for="roster-import-input">Importēt CSV/Excel</label>
-                  <input type="file" id="roster-import-input" accept=".csv,.xlsx,.xls,.txt" class="d-none" />
+                  <input type="file" id="roster-import-input" accept=".csv,.xlsx,.xls,.txt" class="d-none" multiple />
                 </div>
               </div>
               <div class="card-body"><div id="class-list" class="class-grid"></div></div>
@@ -98,6 +103,21 @@
                   <table class="table table-hover align-middle mb-0 submissions-table">
                     <thead><tr><th>Klase</th><th>Nominācija</th><th>Skolēns</th><th>Balsoja</th><th>Vieta</th><th>Pamatojums</th><th>Statuss</th><th class="text-end">Darbības</th></tr></thead>
                     <tbody id="submission-list"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <section class="card shadow-sm mb-4">
+              <div class="card-header bg-white">
+                <h2 class="h5 mb-0">Iesniegtie balsojumi</h2>
+                <p class="small text-muted mb-0">Ja skolēns izvēlējās nepareizu vārdu vai jābalso vēlreiz, izdzēs viņa balsojumu — viņš varēs balsot no jauna.</p>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle mb-0">
+                    <thead><tr><th>Laiks</th><th>Klase</th><th>Skolēns</th><th>Konts</th><th>Izvēles</th><th class="text-end"></th></tr></thead>
+                    <tbody id="ballot-list"></tbody>
                   </table>
                 </div>
               </div>
@@ -118,6 +138,27 @@
               <thead><tr><th>Klase</th><th>Nominācija</th><th>Vieta</th><th>Skolēns</th><th>Punkti</th><th>1. vieta</th><th>2. vieta</th><th>3. vieta</th></tr></thead>
               <tbody id="results-list"></tbody>
             </table></div>
+          </div>
+        </section>
+
+        <section class="card shadow-sm mt-4">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div><h2 class="h5 mb-0">Žurnāls</h2><p class="small text-muted mb-0">Katra izvēle ir atsevišķs ieraksts: kurš par ko un kurā nominācijā balsoja. Rāda pēdējos 1000 ierakstus.</p></div>
+            <div class="d-flex gap-2 align-items-center">
+              <select id="log-filter" class="form-select form-select-sm small-select">
+                <option value="vote">Tikai balsojumi</option>
+                <option value="all">Visas darbības</option>
+              </select>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="btn-export-log">Eksportēt žurnālu</button>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="sticky-top bg-white"><tr><th>Laiks</th><th>Konts</th><th>Darbība</th><th>Detaļas</th></tr></thead>
+                <tbody id="log-list"></tbody>
+              </table>
+            </div>
           </div>
         </section>
       </main>
