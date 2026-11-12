@@ -9,144 +9,28 @@
   --danger: #dc3545;
   --shadow: 0 0.75rem 1.5rem rgba(15, 23, 42, 0.06);
 }
-
-body {
-  background: linear-gradient(180deg, #f5f5f7 0%, #eef2f7 100%);
-  color: #1f2937;
-  font-family: "Segoe UI", Tahoma, sans-serif;
-}
-
-.page-title {
-  font-size: clamp(2rem, 3vw, 2.5rem);
-  font-weight: 700;
-  color: #1d1d1d;
-}
-
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--primary);
-}
-
-.card {
-  border: 1px solid var(--border);
-  border-radius: 0.9rem;
-  box-shadow: var(--shadow);
-}
-
-.card-header {
-  border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.class-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.85rem;
-}
-
-.class-card {
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  padding: 1rem;
-  background: #fafbff;
-}
-
-.class-card h3 {
-  margin: 0 0 0.35rem;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.class-meta {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.class-badge {
-  display: inline-block;
-  margin-top: 0.75rem;
-  padding: 0.3rem 0.55rem;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #334155;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.submissions-table th,
-.submissions-table td,
-.results-table th,
-.results-table td {
-  vertical-align: middle;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.badge-status-valid {
-  background: rgba(25, 135, 84, 0.12);
-  color: var(--success);
-}
-
-.badge-status-pending {
-  background: rgba(253, 126, 20, 0.12);
-  color: var(--warning);
-}
-
-.badge-status-rejected {
-  background: rgba(220, 53, 69, 0.12);
-  color: var(--danger);
-}
-
-.small-select {
-  max-width: 180px;
-}
-
-.nomination-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.9rem 1rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.nomination-item:last-child {
-  border-bottom: none;
-}
-
-.nomination-item strong {
-  font-size: 0.96rem;
-}
-
-.nomination-item small {
-  display: block;
-  color: var(--muted);
-}
-
-.action-group {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.empty-state {
-  padding: 1.2rem;
-  color: var(--muted);
-  text-align: center;
-}
-
-@media (max-width: 767.98px) {
-  .card-header {
-    padding: 0.85rem 1rem;
-  }
-
-  .nomination-item {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
+body { background: linear-gradient(180deg, #f5f5f7 0%, #eef2f7 100%); color: #1f2937; font-family: "Segoe UI", Tahoma, sans-serif; }
+.page-title { font-size: clamp(2rem, 3vw, 2.5rem); font-weight: 700; color: #1d1d1d; }
+.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: .7rem; font-weight: 700; color: var(--primary); }
+.card { border: 1px solid var(--border); border-radius: .9rem; box-shadow: var(--shadow); }
+.card-header { border-bottom: 1px solid var(--border); background: rgba(255,255,255,.9); }
+.login-card { max-width: 520px; margin: 8vh auto; }
+.class-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: .85rem; }
+.class-card { border: 1px solid var(--border); border-radius: .75rem; padding: 1rem; background: #fafbff; }
+.class-card h3 { margin: 0 0 .35rem; font-size: 1rem; font-weight: 700; }
+.class-meta { color: var(--muted); font-size: .85rem; }
+.class-badge { display: inline-block; margin-top: .75rem; padding: .3rem .55rem; border-radius: 999px; background: #f1f5f9; color: #334155; font-size: .75rem; font-weight: 700; }
+.submissions-table th,.submissions-table td,.results-table th,.results-table td { vertical-align: middle; }
+.submissions-table th,.results-table th { white-space: nowrap; }
+.reason-cell { min-width: 220px; max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.badge-status-valid { background: rgba(25,135,84,.12); color: var(--success); }
+.badge-status-pending { background: rgba(253,126,20,.12); color: var(--warning); }
+.badge-status-rejected { background: rgba(220,53,69,.12); color: var(--danger); }
+.small-select { max-width: 220px; }
+.nomination-item { display:flex; justify-content:space-between; align-items:center; gap:.75rem; padding:.9rem 1rem; border-bottom:1px solid var(--border); }
+.nomination-item:last-child { border-bottom:none; }
+.nomination-item strong { font-size:.96rem; }
+.nomination-item small { display:block; color:var(--muted); }
+.action-group { display:flex; gap:.4rem; flex-wrap:wrap; }
+.empty-state { padding:1.2rem; color:var(--muted); text-align:center; }
+@media (max-width:767.98px) { .card-header { padding:.85rem 1rem; } .nomination-item { align-items:flex-start; flex-direction:column; } }

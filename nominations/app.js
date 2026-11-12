@@ -1,469 +1,304 @@
-const STORAGE_KEY = 'wowemain-nominations-state-v1';
+const API_BASE = 'https://school-api.wmcoeu.workers.dev/nominations';
+const TOKEN_KEY = 'wowemain-nominations-session';
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
-const defaultState = {
-  nominations: [
-    { id: crypto.randomUUID(), title: 'Gada radošā dvēsele', description: 'Personība, kas iedvesmo klasesbiedrus.' },
-    { id: crypto.randomUUID(), title: 'Gada sportists', description: 'Motivēts, aktīvs un komandas gars.' },
-    { id: crypto.randomUUID(), title: 'Gada draugs', description: 'Palīdz citiem un veido pozitīvu atmosfēru.' }
-  ],
-  rosters: {
-    '10.A': [
-      'Anna Ozola', 'Jānis Bērziņš', 'Līga Siliņa', 'Emīls Krūmiņš', 'Katrīna Kalniņa', 'Mārtiņš Liepiņš'
-    ],
-    '10.B': [
-      'Ieva Jansone', 'Rihards Kļaviņš', 'Liene Mežule', 'Oskars Grīnbergs', 'Darta Vilka', 'Kristaps Lejnieks'
-    ],
-    '11.A': [
-      'Alise Priedīte', 'Henrijs Dārziņš', 'Marta Kārkliņa', 'Toms Vīksna', 'Zane Lāce', 'Jēkabs Zariņš'
-    ]
-  },
-  submissions: [
-    {
-      id: crypto.randomUUID(),
-      className: '10.A',
-      nominationId: 'demo',
-      nominationTitle: 'Gada radošā dvēsele',
-      nominee: 'Anna Ozola',
-      voter: 'Studentis 1',
-      rank: 1,
-      reason: 'Viņa ir ļoti radoša un vienmēr idejas, kas padara klasi interesantāku.',
-      status: 'valid'
-    },
-    {
-      id: crypto.randomUUID(),
-      className: '10.A',
-      nominationId: 'demo',
-      nominationTitle: 'Gada sportists',
-      nominee: 'Jānis Bērziņš',
-      voter: 'Studentis 2',
-      rank: 2,
-      reason: 'Piedalās sacensībās un iedvesmo citus sportot.',
-      status: 'pending'
-    },
-    {
-      id: crypto.randomUUID(),
-      className: '10.B',
-      nominationId: 'demo',
-      nominationTitle: 'Gada draugs',
-      nominee: 'Liene Mežule',
-      voter: 'Studentis 3',
-      rank: 3,
-      reason: 'Katru reizi palīdz klasesbiedriem un ir ļoti draudzīga.',
-      status: 'rejected'
-    }
-  ]
-};
-
-const state = loadState();
-
+const state = { token: sessionStorage.getItem(TOKEN_KEY) || '', user: null, nominations: [], classes: [], submissions: [], results: [], votingOpen: false };
+const $ = (selector) => document.querySelector(selector);
 const els = {
-  nominationForm: document.getElementById('nomination-form'),
-  nominationTitle: document.getElementById('nomination-title'),
-  nominationDescription: document.getElementById('nomination-description'),
-  nominationList: document.getElementById('nomination-list'),
-  classList: document.getElementById('class-list'),
-  studentCountBadge: document.getElementById('student-count-badge'),
-  submissionList: document.getElementById('submission-list'),
-  resultsList: document.getElementById('results-list'),
-  filterNomination: document.getElementById('result-filter-nomination'),
-  rosterImportInput: document.getElementById('roster-import-input'),
-  exportButton: document.getElementById('btn-export-csv')
+  loginView: $('#login-view'), loginError: $('#login-error'), appView: $('#app-view'), userLabel: $('#user-label'),
+  message: $('#app-message'), nominationForm: $('#nomination-form'), nominationTitle: $('#nomination-title'),
+  nominationDescription: $('#nomination-description'), nominationList: $('#nomination-list'), classList: $('#class-list'),
+  studentCount: $('#student-count-badge'), submissions: $('#submission-list'), results: $('#results-list'),
+  filter: $('#result-filter-nomination'), rosterInput: $('#roster-import-input'), exportButton: $('#btn-export-csv'),
+  votingStatus: $('#voting-status'),
 };
 
-function loadState() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return structuredClone(defaultState);
+function esc(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function showMessage(message, type = 'success') {
+  els.message.textContent = message;
+  els.message.className = `alert alert-${type}`;
+  els.message.classList.remove('d-none');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function clearMessage() { els.message.classList.add('d-none'); }
+function setLoggedOut(message = '') {
+  state.token = '';
+  state.user = null;
+  sessionStorage.removeItem(TOKEN_KEY);
+  els.appView.classList.add('d-none');
+  els.loginView.classList.remove('d-none');
+  if (message) {
+    els.loginError.textContent = message;
+    els.loginError.classList.remove('d-none');
+  }
+}
+async function api(path, { method = 'GET', body } = {}) {
+  const headers = {};
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const response = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    redirect: 'follow',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    if (response.status === 401 && path !== '/auth/exchange') {
+      setLoggedOut('Sesija beigusies. Ienāc vēlreiz ar skolas Microsoft kontu.');
+    }
+    throw new Error(data.error || `Pieprasījums neizdevās (${response.status}).`);
+  }
+  return data;
+}
 
+async function consumeAuthCode() {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get('auth_code');
+  if (!code) return false;
+  url.searchParams.delete('auth_code');
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
   try {
-    const parsed = JSON.parse(saved);
-    return {
-      nominations: Array.isArray(parsed.nominations) && parsed.nominations.length ? parsed.nominations : defaultState.nominations,
-      rosters: parsed.rosters && typeof parsed.rosters === 'object' ? parsed.rosters : defaultState.rosters,
-      submissions: Array.isArray(parsed.submissions) ? parsed.submissions : defaultState.submissions
-    };
+    const response = await api('/auth/exchange', { method: 'POST', body: { code } });
+    state.token = response.token;
+    sessionStorage.setItem(TOKEN_KEY, state.token);
+    return true;
   } catch (error) {
-    console.error('Failed to parse local state', error);
-    return structuredClone(defaultState);
+    setLoggedOut(error.message || 'Neizdevās pabeigt Microsoft pierakstīšanos.');
+    return false;
   }
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function statusText(status) {
+  return ({ valid: 'Apstiprināts', pending: 'Gaida', rejected: 'Noraidīts' })[status] || 'Nezināms';
 }
-
-function uid() {
-  return (typeof crypto !== 'undefined' && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function getAllStudents() {
-  return Object.entries(state.rosters).reduce((acc, [className, students]) => {
-    const names = Array.isArray(students) ? students : [];
-    return acc + names.length;
-  }, 0);
-}
-
-function formatStatus(status) {
-  switch (status) {
-    case 'valid':
-      return 'Apstiprināts';
-    case 'pending':
-      return 'Gaida';
-    case 'rejected':
-      return 'Noraidīts';
-    default:
-      return 'Nezināms';
-  }
-}
-
 function statusClass(status) {
-  switch (status) {
-    case 'valid':
-      return 'badge-status-valid';
-    case 'pending':
-      return 'badge-status-pending';
-    case 'rejected':
-      return 'badge-status-rejected';
-    default:
-      return 'text-bg-secondary';
-  }
+  return ({ valid: 'badge-status-valid', pending: 'badge-status-pending', rejected: 'badge-status-rejected' })[status] || 'text-bg-secondary';
 }
-
-function renderNominationList() {
+function renderNominations() {
   if (!state.nominations.length) {
     els.nominationList.innerHTML = '<div class="empty-state">Vēl nav pievienota neviena nominācija.</div>';
+  } else {
+    els.nominationList.innerHTML = state.nominations.map((item) => `
+      <div class="nomination-item">
+        <div><strong>${esc(item.title)}</strong><small>${esc(item.description || 'Bez apraksta')}</small></div>
+        <button class="btn btn-sm btn-outline-danger" data-action="delete-nomination" data-id="${esc(item.id)}">Dzēst</button>
+      </div>`).join('');
+  }
+  const selected = els.filter.value;
+  els.filter.innerHTML = '<option value="all">Visas nominācijas</option>' + state.nominations.map((item) =>
+    `<option value="${esc(item.id)}">${esc(item.title)}</option>`).join('');
+  if ([...els.filter.options].some((option) => option.value === selected)) els.filter.value = selected;
+}
+function renderClasses() {
+  const count = state.classes.reduce((sum, item) => sum + Number(item.student_count || 0), 0);
+  els.studentCount.textContent = `${count} skolēnu`;
+  if (!state.classes.length) {
+    els.classList.innerHTML = '<div class="empty-state">Nav importētu skolēnu. Importējiet CSV vai Excel failu ar vārdu, skolas e-pastu un klasi.</div>';
     return;
   }
-
-  els.nominationList.innerHTML = state.nominations.map((item) => `
-    <div class="nomination-item">
-      <div>
-        <strong>${escapeHtml(item.title)}</strong>
-        <small>${escapeHtml(item.description || 'Bez apraksta')}</small>
-      </div>
-      <div class="action-group">
-        <button class="btn btn-sm btn-outline-danger" data-action="delete-nomination" data-id="${item.id}">Dzēst</button>
-      </div>
-    </div>
-  `).join('');
-
-  els.filterNomination.innerHTML = `<option value="all">Visas nominācijas</option>${state.nominations.map((n) => `
-    <option value="${n.id}">${escapeHtml(n.title)}</option>
-  `).join('')}`;
+  els.classList.innerHTML = state.classes.map((item) => `
+    <div class="class-card"><h3>${esc(item.class_name)}</h3><div class="class-meta">${Number(item.student_count)} skolēni</div><span class="class-badge">${Number(item.student_count) ? 'Aktīva klase' : 'Tukša klase'}</span></div>`).join('');
 }
-
-function renderClassList() {
-  const classes = Object.entries(state.rosters);
-  els.studentCountBadge.textContent = `${getAllStudents()} skolēnu`;
-
-  if (!classes.length) {
-    els.classList.innerHTML = '<div class="empty-state">Nav importētu klašu. Importējiet CSV/Excel failu.</div>';
-    return;
-  }
-
-  els.classList.innerHTML = classes.map(([className, students]) => `
-    <div class="class-card">
-      <h3>${escapeHtml(className)}</h3>
-      <div class="class-meta">${students.length} skolēni</div>
-      <span class="class-badge">${students.length > 0 ? 'Aktīva klase' : 'Tukša klase'}</span>
-    </div>
-  `).join('');
-}
-
 function renderSubmissions() {
   if (!state.submissions.length) {
-    els.submissionList.innerHTML = '<tr><td colspan="7" class="empty-state">Vēl nav iesniegti balsojumi.</td></tr>';
+    els.submissions.innerHTML = '<tr><td colspan="8" class="empty-state">Vēl nav iesniegtu balsojumu.</td></tr>';
     return;
   }
-
-  els.submissionList.innerHTML = state.submissions.map((entry) => `
+  els.submissions.innerHTML = state.submissions.map((entry) => `
     <tr>
-      <td>${escapeHtml(entry.className)}</td>
-      <td>${escapeHtml(entry.nominationTitle || '—')}</td>
-      <td>${escapeHtml(entry.nominee)}</td>
-      <td>${entry.rank}. izvēle</td>
-      <td>${escapeHtml(entry.reason || '—')}</td>
-      <td><span class="badge ${statusClass(entry.status)} rounded-pill">${formatStatus(entry.status)}</span></td>
-      <td class="text-end">
-        <div class="action-group justify-content-end">
-          <button class="btn btn-sm btn-success" data-action="approve-entry" data-id="${entry.id}">Apstiprināt</button>
-          <button class="btn btn-sm btn-outline-danger" data-action="reject-entry" data-id="${entry.id}">Noraidīt</button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
+      <td>${esc(entry.className)}</td><td>${esc(entry.nominationTitle)}</td><td>${esc(entry.nominee)}</td>
+      <td>${esc(entry.voter || '—')}</td><td>${Number(entry.rank)}. izvēle</td><td class="reason-cell">${esc(entry.reason)}</td>
+      <td><span class="badge ${statusClass(entry.status)} rounded-pill">${statusText(entry.status)}</span></td>
+      <td class="text-end"><div class="action-group justify-content-end">
+        ${entry.status !== 'valid' ? `<button class="btn btn-sm btn-success" data-action="moderate" data-status="valid" data-id="${esc(entry.id)}">Apstiprināt</button>` : ''}
+        ${entry.status !== 'rejected' ? `<button class="btn btn-sm btn-outline-danger" data-action="moderate" data-status="rejected" data-id="${esc(entry.id)}">Noraidīt</button>` : ''}
+        ${entry.status === 'rejected' ? `<button class="btn btn-sm btn-outline-secondary" data-action="moderate" data-status="pending" data-id="${esc(entry.id)}">Atjaunot</button>` : ''}
+      </div></td>
+    </tr>`).join('');
 }
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-function computeResults() {
-  const selectedNomination = els.filterNomination.value;
-  const rows = [];
-  const voteWeight = { 1: 3, 2: 2, 3: 1 };
-
-  const classes = Object.keys(state.rosters);
-
-  classes.forEach((className) => {
-    const nominationIds = state.nominations.map((n) => n.id);
-    nominationIds.forEach((nominationId) => {
-      if (selectedNomination !== 'all' && selectedNomination !== nominationId) return;
-
-      const byNominee = new Map();
-      state.submissions
-        .filter((entry) => entry.className === className && entry.nominationId === nominationId && entry.status !== 'rejected')
-        .forEach((entry) => {
-          const key = entry.nominee;
-          if (!byNominee.has(key)) {
-            byNominee.set(key, {
-              nominee: key,
-              first: 0,
-              second: 0,
-              third: 0,
-              total: 0
-            });
-          }
-          const value = byNominee.get(key);
-          if (entry.rank === 1) value.first += 1;
-          if (entry.rank === 2) value.second += 1;
-          if (entry.rank === 3) value.third += 1;
-          value.total += voteWeight[entry.rank] || 0;
-        });
-
-      const nominees = [...byNominee.values()].sort((a, b) => b.total - a.total || b.first - a.first || b.second - a.second);
-      const winner = nominees[0] || null;
-
-      if (winner) {
-        rows.push({
-          className,
-          nominationId,
-          nominationTitle: state.nominations.find((n) => n.id === nominationId)?.title || 'Nominācija',
-          winner: winner.nominee,
-          total: winner.total,
-          first: winner.first,
-          second: winner.second,
-          third: winner.third
-        });
-      }
-    });
-  });
-
-  return rows.sort((a, b) => {
-    if (a.className !== b.className) return a.className.localeCompare(b.className, 'lv');
-    return a.nominationTitle.localeCompare(b.nominationTitle, 'lv');
-  });
-}
-
 function renderResults() {
-  const rows = computeResults();
+  const nominationId = els.filter.value;
+  const rows = state.results.filter((row) => nominationId === 'all' || row.nominationId === nominationId).filter((row) => row.place <= 3);
   if (!rows.length) {
-    els.resultsList.innerHTML = '<tr><td colspan="6" class="empty-state">Nav datu atlasītajai nominācijai.</td></tr>';
+    els.results.innerHTML = '<tr><td colspan="8" class="empty-state">Nav apstiprinātu rezultātu atlasītajai nominācijai.</td></tr>';
     return;
   }
-
-  els.resultsList.innerHTML = rows.map((row) => `
-    <tr>
-      <td>${escapeHtml(row.className)}</td>
-      <td>${escapeHtml(row.nominationTitle)}</td>
-      <td><strong>${row.total}</strong> punkti</td>
-      <td>${row.first}</td>
-      <td>${row.second}</td>
-      <td>${row.third}</td>
-    </tr>
-  `).join('');
+  els.results.innerHTML = rows.map((row) => `
+    <tr><td>${esc(row.className)}</td><td>${esc(row.nominationTitle)}</td><td>${row.place}.</td><td><strong>${esc(row.nominee)}</strong></td>
+      <td>${Number(row.points)}</td><td>${Number(row.first)}</td><td>${Number(row.second)}</td><td>${Number(row.third)}</td></tr>`).join('');
 }
-
-function addNomination(event) {
+function renderVoting() {
+  els.votingStatus.textContent = state.votingOpen ? 'Balsošana ir atvērta.' : 'Balsošana ir slēgta.';
+  $('#btn-voting-open').disabled = state.votingOpen;
+  $('#btn-voting-close').disabled = !state.votingOpen;
+}
+function renderAll() {
+  renderNominations(); renderClasses(); renderSubmissions(); renderResults(); renderVoting();
+}
+async function loadData() {
+  clearMessage();
+  const data = await api('/data');
+  state.nominations = data.nominations || [];
+  state.classes = data.classes || [];
+  state.submissions = data.submissions || [];
+  state.results = data.results || [];
+  state.votingOpen = !!data.votingOpen;
+  renderAll();
+}
+function csvRows(text) {
+  const rows = [];
+  let row = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (char === '"') quoted = false;
+      else cell += char;
+    } else if (char === '"') quoted = true;
+    else if (char === ',' || char === ';' || char === '\t') {
+      row.push(cell.trim()); cell = '';
+    } else if (char === '\n' || char === '\r') {
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell.trim()); cell = '';
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+    } else cell += char;
+  }
+  row.push(cell.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+}
+function normalizeHeader(value) {
+  return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function rosterFromRows(rows) {
+  if (!rows.length) throw new Error('Fails ir tukšs.');
+  const headers = rows[0].map(normalizeHeader);
+  const find = (patterns) => headers.findIndex((header) => patterns.some((pattern) => pattern.test(header)));
+  let nameIndex = find([/^vards(\s+uzvards)?$/, /^name$/, /^full name$/, /^student$/]);
+  let emailIndex = find([/^e.?pasts$/, /^email$/, /^school email$/, /^username$/]);
+  let classIndex = find([/^klase$/, /^class$/, /^class name$/]);
+  let start = 1;
+  if (nameIndex < 0 || emailIndex < 0 || classIndex < 0) {
+    nameIndex = 0; emailIndex = 1; classIndex = 2; start = 0;
+  }
+  const students = [];
+  for (let index = start; index < rows.length; index++) {
+    const row = rows[index];
+    const student = { name: row[nameIndex] || '', email: row[emailIndex] || '', className: row[classIndex] || '' };
+    if (!student.name && !student.email && !student.className) continue;
+    students.push(student);
+  }
+  return students;
+}
+async function readRoster(file) {
+  if (file.size > MAX_FILE_BYTES) throw new Error('Fails ir lielāks par 5 MB.');
+  const ext = file.name.toLowerCase();
+  let rows;
+  if (ext.endsWith('.csv') || ext.endsWith('.txt')) rows = csvRows(await file.text());
+  else if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
+    if (typeof XLSX === 'undefined') throw new Error('Excel lasītājs nav ielādēts. Izmantojiet CSV.');
+    const book = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    if (!book.SheetNames.length) throw new Error('Excel failā nav lapu.');
+    rows = XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]], { header: 1, defval: '' });
+  } else throw new Error('Atbalstīti CSV, XLSX, XLS un TXT faili.');
+  return rosterFromRows(rows);
+}
+async function importRoster(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const students = await readRoster(file);
+    if (!students.length) throw new Error('Failā netika atrasts neviens skolēna ieraksts.');
+    const result = await api('/rosters/import', { method: 'POST', body: { students } });
+    await loadData();
+    const issueText = result.errors?.length ? ` ${result.errors.length} rindas netika importētas; pārbaudiet e-pastu, vārdu un klasi.` : '';
+    showMessage(`Importēti/atjaunināti ${result.imported} skolēni.${issueText}`, result.errors?.length ? 'warning' : 'success');
+  } catch (error) { showMessage(error.message, 'danger'); }
+  finally { event.target.value = ''; }
+}
+async function addNomination(event) {
   event.preventDefault();
   const title = els.nominationTitle.value.trim();
   const description = els.nominationDescription.value.trim();
-
-  if (!title) {
-    alert('Ievadiet nominācijas nosaukumu.');
-    return;
-  }
-
-  state.nominations.push({
-    id: uid(),
-    title,
-    description
-  });
-
-  els.nominationForm.reset();
-  saveState();
-  renderAll();
-}
-
-function deleteNomination(id) {
-  state.nominations = state.nominations.filter((item) => item.id !== id);
-  state.submissions = state.submissions.filter((entry) => entry.nominationId !== id);
-  saveState();
-  renderAll();
-}
-
-function updateEntryStatus(id, status) {
-  const entry = state.submissions.find((item) => item.id === id);
-  if (!entry) return;
-  entry.status = status;
-  saveState();
-  renderAll();
-}
-
-function parseRosterFile(file) {
-  return new Promise((resolve, reject) => {
-    const name = (file.name || '').toLowerCase();
-    const reader = new FileReader();
-
-    reader.onload = (event) => {
-      try {
-        const text = event.target?.result ?? '';
-        let rows = [];
-
-        if (name.endsWith('.csv') || name.endsWith('.txt')) {
-          const lines = String(text).split(/\r?\n/).filter((line) => line.trim());
-          const delimiter = lines[0]?.includes(';') ? ';' : ',';
-          rows = lines.map((line) => line.split(delimiter).map((cell) => cell.trim()));
-        } else if (name.endsWith('.xls') || name.endsWith('.xlsx')) {
-          const data = new Uint8Array(event.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-        } else {
-          reject(new Error('Nepazīts faila formāts. Izmantojiet CSV, XLSX vai TXT.'));
-          return;
-        }
-
-        const records = [];
-        for (const row of rows) {
-          if (!Array.isArray(row) || row.length < 2) continue;
-          const values = row.map((cell) => String(cell).trim());
-          const classIndex = values.findIndex((value) => /^\d{1,2}\s*([A-Za-z]|[A-Za-z]\s*[-/]\s*[A-Za-z])?$/.test(value));
-          const nameIndex = values.findIndex((value) => /[A-Za-zĀČĒĢĪĶĻŅÖŖŠŪŽāčēģīķļņöŗšūž]/.test(value));
-
-          if (classIndex === -1 || nameIndex === -1) continue;
-          const className = values[classIndex].replace(/\s+/g, ' ').replace(/\.$/, '').trim();
-          const studentName = values[nameIndex].replace(/\s+/g, ' ').trim();
-
-          if (!className || !studentName) continue;
-          records.push({ className, studentName });
-        }
-
-        if (!records.length) {
-          reject(new Error('Fails netika nolasīts pareizi. Pārbaudiet, vai tajā ir klases nosaukums un skolēnu vārdi.'));
-          return;
-        }
-
-        resolve(records);
-      } catch (error) {
-        reject(error);
-      }
-    };
-
-    reader.onerror = () => reject(new Error('Neizdevās nolasīt failu.'));
-
-    if (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.txt')) {
-      reader.readAsText(file, 'UTF-8');
-    } else {
-      reader.readAsArrayBuffer(file);
-    }
-  });
-}
-
-async function handleRosterImport(event) {
-  const file = event.target.files && event.target.files[0];
-  if (!file) return;
-
+  if (!title) return;
   try {
-    const records = await parseRosterFile(file);
-    const nextRosters = { ...state.rosters };
-
-    for (const { className, studentName } of records) {
-      const normalizedClass = className.trim();
-      if (!normalizedClass) continue;
-      const names = nextRosters[normalizedClass] || [];
-      if (!names.includes(studentName)) names.push(studentName);
-      nextRosters[normalizedClass] = names;
-    }
-
-    state.rosters = nextRosters;
-    saveState();
-    renderAll();
-    event.target.value = '';
-  } catch (error) {
-    alert(error.message || 'Neizdevās importēt klases sarakstu.');
-    event.target.value = '';
-  }
+    await api('/nominations/add', { method: 'POST', body: { title, description } });
+    els.nominationForm.reset(); await loadData(); showMessage('Nominācija pievienota.');
+  } catch (error) { showMessage(error.message, 'danger'); }
 }
-
+async function nominationAction(event) {
+  const button = event.target.closest('[data-action="delete-nomination"]');
+  if (!button) return;
+  const nomination = state.nominations.find((item) => item.id === button.dataset.id);
+  if (!nomination || !confirm(`Dzēst nomināciju “${nomination.title}”? Saistītie balsojumi arī tiks dzēsti.`)) return;
+  try {
+    await api('/nominations/delete', { method: 'POST', body: { id: button.dataset.id } });
+    await loadData(); showMessage('Nominācija dzēsta.');
+  } catch (error) { showMessage(error.message, 'danger'); }
+}
+async function moderate(event) {
+  const button = event.target.closest('[data-action="moderate"]');
+  if (!button) return;
+  const status = button.dataset.status;
+  if (status === 'rejected' && !confirm('Noraidīt šo nomināciju? Tā vairs netiks ieskaitīta rezultātos.')) return;
+  try {
+    await api('/entries/moderate', { method: 'POST', body: { id: button.dataset.id, status } });
+    await loadData(); showMessage('Moderācijas statuss saglabāts.');
+  } catch (error) { showMessage(error.message, 'danger'); }
+}
+async function setVoting(open) {
+  if (open && !confirm('Atvērt balsošanu skolēniem?')) return;
+  if (!open && !confirm('Slēgt balsošanu?')) return;
+  try {
+    const result = await api(`/voting/${open ? 'open' : 'close'}`, { method: 'POST', body: {} });
+    state.votingOpen = result.open; renderVoting(); showMessage(open ? 'Balsošana atvērta.' : 'Balsošana slēgta.');
+  } catch (error) { showMessage(error.message, 'danger'); }
+}
 function exportCsv() {
-  const rows = computeResults();
-  if (!rows.length) {
-    alert('Nav datu eksportēšanai.');
-    return;
+  const selected = els.filter.value;
+  const rows = state.results.filter((row) => row.place <= 3 && (selected === 'all' || row.nominationId === selected));
+  if (!rows.length) { showMessage('Nav apstiprinātu rezultātu eksportēšanai.', 'warning'); return; }
+  const values = [['Klase', 'Nominācija', 'Vieta', 'Skolēns', 'Punkti', '1. vieta', '2. vieta', '3. vieta'], ...rows.map((row) => [row.className, row.nominationTitle, row.place, row.nominee, row.points, row.first, row.second, row.third])];
+  const csv = '\ufeff' + values.map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a'); link.href = url; link.download = 'nominaciju-rezultati.csv'; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function logout() {
+  try { await api('/auth/logout', { method: 'POST', body: {} }); } catch { /* clear local token regardless */ }
+  setLoggedOut();
+}
+async function start() {
+  const exchanged = await consumeAuthCode();
+  if (!state.token && !exchanged) return;
+  try {
+    const auth = await api('/auth/me');
+    if (!auth.user || auth.user.role !== 'organizer') {
+      setLoggedOut('Šim kontam nav organizatora piekļuves.'); return;
+    }
+    state.user = auth.user;
+    els.loginView.classList.add('d-none');
+    els.appView.classList.remove('d-none');
+    els.userLabel.textContent = `${auth.user.name || auth.user.email} · organizators`;
+    await loadData();
+  } catch (error) {
+    if (!els.loginView.classList.contains('d-none')) return;
+    setLoggedOut(error.message || 'Neizdevās ielādēt organizatora paneli.');
   }
-
-  const header = ['Klase', 'Nominācija', 'Vērtējums', '1. vieta', '2. vieta', '3. vieta'];
-  const csvRows = [header.join(',')];
-
-  rows.forEach((row) => {
-    csvRows.push([
-      row.className,
-      row.nominationTitle,
-      row.total,
-      row.first,
-      row.second,
-      row.third
-    ].map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','));
-  });
-
-  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'nominaciju-rezultati.csv';
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
-function bindEvents() {
-  els.nominationForm.addEventListener('submit', addNomination);
-  els.nominationList.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-action="delete-nomination"]');
-    if (!button) return;
-    deleteNomination(button.dataset.id);
-  });
-
-  els.submissionList.addEventListener('click', (event) => {
-    const approve = event.target.closest('[data-action="approve-entry"]');
-    if (approve) {
-      updateEntryStatus(approve.dataset.id, 'valid');
-      return;
-    }
-
-    const reject = event.target.closest('[data-action="reject-entry"]');
-    if (reject) {
-      updateEntryStatus(reject.dataset.id, 'rejected');
-    }
-  });
-
-  els.resultFilterNomination.addEventListener('change', renderResults);
-  els.rosterImportInput.addEventListener('change', handleRosterImport);
-  els.exportButton.addEventListener('click', exportCsv);
-}
-
-function renderAll() {
-  renderNominationList();
-  renderClassList();
-  renderSubmissions();
-  renderResults();
-}
-
-bindEvents();
-renderAll();
+els.nominationForm.addEventListener('submit', addNomination);
+els.nominationList.addEventListener('click', nominationAction);
+els.submissions.addEventListener('click', moderate);
+els.filter.addEventListener('change', renderResults);
+els.rosterInput.addEventListener('change', importRoster);
+els.exportButton.addEventListener('click', exportCsv);
+$('#btn-refresh').addEventListener('click', () => loadData().then(() => showMessage('Dati atjaunoti.')).catch((error) => showMessage(error.message, 'danger')));
+$('#btn-voting-open').addEventListener('click', () => setVoting(true));
+$('#btn-voting-close').addEventListener('click', () => setVoting(false));
+$('#btn-logout').addEventListener('click', logout);
+start();
