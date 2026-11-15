@@ -189,6 +189,27 @@ async function loadData() {
   renderAll();
 }
 
+async function importRoster(event) {
+  const files = [...event.target.files];
+  event.target.value = '';
+  if (!files.length) return;
+  const students = [];
+  const problems = [];
+  for (const file of files) {
+    try { students.push(...await readRoster(file)); }
+    catch (error) { problems.push(error.message); }
+  }
+  if (!students.length) { showMessage(problems.join(' ') || 'Neatradu nevienu skolēnu.', 'danger'); return; }
+  try {
+    const r = await api('/rosters/import', { method: 'POST', body: { students } });
+    await loadData();
+    showMessage(
+      `Importēti ${r.imported} jauni skolēni (${r.existing} jau bija).` + (problems.length ? ' Problēmas: ' + problems.join(' ') : ''),
+      problems.length ? 'warning' : 'success'
+    );
+  } catch (error) { showMessage(error.message, 'danger'); }
+}
+
 // ---------- Actions ----------
 async function addNomination(event) {
   event.preventDefault();

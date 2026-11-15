@@ -90,7 +90,8 @@ async function audit(db, user, action, target = null, details = null) {
 
 async function microsoftLogin(request, env) {
   if (!env.MS_CLIENT_ID || !env.MS_TENANT_ID || !env.MS_CLIENT_SECRET) return fail("Microsoft sign-in is not configured.", 503);
-  const state = randomToken();
+  const target = new URL(request.url).searchParams.get("return") === "panel" ? "panel" : "vote";
+  const state = `${randomToken()}.${target}`;
   const nonce = randomToken();
   const verifier = randomToken(48);
   const challenge = await sha256(verifier);
@@ -191,7 +192,9 @@ async function microsoftCallback(request, env) {
   await env.nominations_db.prepare("INSERT INTO nominations_auth_codes (code_hash, email, role, expires_at) VALUES (?, ?, ?, ?)")
     .bind(await sha256(authCode), email, role, Math.floor(Date.now() / 1000) + AUTH_CODE_SECONDS).run();
   const frontend = new URL(env.FRONTEND_ORIGIN || "https://wowe-main.eu");
-  frontend.pathname = `${frontend.pathname.replace(/\/$/, "")}/nominations/${role === "organizer" ? "" : "vote.html"}`;
+  const target = state.endsWith(".panel") ? "panel" : "vote";
+  const page = role === "organizer" && target === "panel" ? "" : "vote.html";
+  frontend.pathname = `${frontend.pathname.replace(/\/$/, "")}/nominations/${page}`;
   frontend.searchParams.set("auth_code", authCode);
   return Response.redirect(frontend.toString(), 302);
 }
