@@ -1,61 +1,55 @@
 const API_BASE = 'https://school-api.wmcoeu.workers.dev/nominations';
 const TOKEN_KEY = 'wowemain-nominations-session';
+const MIN_REASON = 10;
+
 const state = {
   token: sessionStorage.getItem(TOKEN_KEY) || '',
-  user: null,
+  email: '',
+  role: '',
   classes: [],
   nominations: [],
   roster: [],
-  student: null,
+  className: '',
   submitted: false,
   votingOpen: false,
 };
 
 const $ = (selector) => document.querySelector(selector);
+const views = {
+  loading: $('#view-loading'), login: $('#view-login'), closed: $('#view-closed'),
+  done: $('#view-done'), setup: $('#view-setup'), form: $('#view-form'),
+};
 const els = {
-  message: $('#msg'),
-  loading: $('#view-loading'),
-  login: $('#view-login'),
-  closed: $('#view-closed'),
-  done: $('#view-done'),
-  setup: $('#view-setup'),
-  form: $('#view-form'),
-  classSelect: $('#sel-class'),
-  nameSelect: $('#sel-name'),
-  btnStart: $('#btn-start'),
-  nominations: $('#nominations'),
-  progress: $('#progress'),
-  btnSubmit: $('#btn-submit'),
-  whoClass: $('#who-class'),
-  whoName: $('#who-name'),
-  linkChange: $('#link-change'),
-  linkLogout: $('#link-logout'),
-  userLine: $('#user-line'),
-  panelLink: $('#link-panel'),
-  btnReload: $('#btn-reload'),
+  message: $('#msg'), classSelect: $('#sel-class'), btnStart: $('#btn-start'),
+  nominations: $('#nominations'), progress: $('#progress'), btnSubmit: $('#btn-submit'),
+  whoClass: $('#who-class'), linkChange: $('#link-change'), linkLogout: $('#link-logout'),
+  userLine: $('#user-line'), panelLink: $('#link-panel'), btnReload: $('#btn-reload'),
 };
 
+function esc(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function show(name) {
+  for (const [key, el] of Object.entries(views)) el.classList.toggle('d-none', key !== name);
+}
 function showMessage(text, type = 'danger') {
   els.message.textContent = text;
   els.message.className = `alert alert-${type} mt-3`;
-  els.message.classList.remove('d-none');
 }
-
 function clearMessage() {
-  els.message.classList.add('d-none');
+  els.message.className = 'alert d-none';
   els.message.textContent = '';
 }
-
 function setLoggedOut(message = '') {
   state.token = '';
-  state.user = null;
+  state.email = '';
+  state.role = '';
   sessionStorage.removeItem(TOKEN_KEY);
-  els.login.classList.remove('d-none');
-  els.closed.classList.add('d-none');
-  els.done.classList.add('d-none');
-  els.setup.classList.add('d-none');
-  els.form.classList.add('d-none');
-  els.loading.classList.add('d-none');
+  els.userLine.textContent = '';
+  els.panelLink.classList.add('d-none');
+  els.linkLogout.classList.add('d-none');
+  show('login');
   if (message) showMessage(message, 'warning');
 }
 
@@ -64,15 +58,12 @@ async function api(path, { method = 'GET', body } = {}) {
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    redirect: 'follow',
+    method, headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'follow',
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.ok === false) {
     if (response.status === 401 && path !== '/auth/exchange') {
-      setLoggedOut('Sesija beigusies. Ienāc vēlreiz ar skolas Microsoft kontu.');
+      setLoggedOut('Sesija beigusies. Pieraksties vēlreiz ar skolas Microsoft kontu.');
     }
     throw new Error(data.error || `Pieprasījums neizdevās (${response.status}).`);
   }
@@ -82,281 +73,182 @@ async function api(path, { method = 'GET', body } = {}) {
 async function consumeAuthCode() {
   const url = new URL(window.location.href);
   const code = url.searchParams.get('auth_code');
-  if (!code) return false;
+  if (!code) return;
   url.searchParams.delete('auth_code');
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
   try {
     const response = await api('/auth/exchange', { method: 'POST', body: { code } });
     state.token = response.token;
     sessionStorage.setItem(TOKEN_KEY, state.token);
-    return true;
   } catch (error) {
     setLoggedOut(error.message || 'Neizdevās pabeigt Microsoft pierakstīšanos.');
-    return false;
   }
 }
 
-async function loadStudentData() {
-  const data = await api('/student/data');
-  state.classes = data.classes || [];
-  state.nominations = data.nominations || [];
-  state.submitted = !!data.submitted;
-  state.votingOpen = !!data.votingOpen;
-  state.user = data.email || state.user;
-  renderClassOptions();
-  renderForm();
-}
-
-function renderClassOptions() {
-  const current = els.classSelect.value || '';
-  els.classSelect.innerHTML = '<option value="">— izvēlies klasi —</option>' +
-    state.classes.map((className) => `<option value="${className}">${className}</option>`).join('');
-  if (state.classes.includes(current)) els.classSelect.value = current;
-}
-
-async function loadRosterForClass(className) {
-  if (!className) {
-    state.roster = [];
-    els.nameSelect.innerHTML = '<option value="">— izvēlies savu vārdu —</option>';
-    els.btnStart.disabled = true;
-    return;
-  }
-  const data = await api(`/student/class?name=${encodeURIComponent(className)}`);
-  state.roster = data.students || [];
-  els.nameSelect.innerHTML = '<option value="">— izvēlies savu vārdu —</option>' +
-    state.roster.map((student) => `<option value="${student.id}">${student.name}</option>`).join('');
-  els.btnStart.disabled = !state.roster.length;
-  if (!state.roster.length) {
-    showMessage(`Klasei “${className}” nav studentu. Jūs varat ievadīt savu vārdu manuāli.`, 'warning');
-  }
-}
-
-function renderForm() {
-  if (state.submitted) {
-    showDone();
-    return;
-  }
-
-  if (!state.votingOpen) {
-    showClosed();
-    return;
-  }
-
-  els.setup.classList.remove('d-none');
-  els.form.classList.add('d-none');
-  els.loading.classList.add('d-none');
-  els.login.classList.add('d-none');
-  els.closed.classList.add('d-none');
-  els.done.classList.add('d-none');
-  els.userLine.textContent = state.user ? ` | ${state.user}` : '';
-  if (state.user) {
-    els.panelLink.classList.remove('d-none');
+// ---------- flow ----------
+async function start() {
+  clearMessage();
+  show('loading');
+  await consumeAuthCode();
+  if (!state.token) { show('login'); return; }   // not signed in -> only the login screen
+  try {
+    const auth = await api('/auth/me');
+    if (!auth.user) { setLoggedOut(); return; }
+    state.email = auth.user.email;
+    state.role = auth.user.role;
+    els.userLine.textContent = `Pierakstīts: ${state.email} `;
     els.linkLogout.classList.remove('d-none');
+    els.panelLink.classList.toggle('d-none', state.role !== 'organizer');
+
+    const data = await api('/student/data');
+    state.classes = data.classes || [];
+    state.nominations = data.nominations || [];
+    state.submitted = !!data.submitted;
+    state.votingOpen = !!data.votingOpen;
+    route();
+  } catch (error) {
+    if (state.token) setLoggedOut(error.message || 'Kļūda ielādējot balsošanas lapu.');
   }
 }
 
-function showClosed() {
-  els.closed.classList.remove('d-none');
-  els.setup.classList.add('d-none');
-  els.form.classList.add('d-none');
-  els.login.classList.add('d-none');
-  els.loading.classList.add('d-none');
-  els.done.classList.add('d-none');
-}
-
-function showDone() {
-  els.done.classList.remove('d-none');
-  els.setup.classList.add('d-none');
-  els.form.classList.add('d-none');
-  els.closed.classList.add('d-none');
-  els.login.classList.add('d-none');
-  els.loading.classList.add('d-none');
-}
-
-function beginVoting() {
-  const className = els.classSelect.value;
-  const studentId = els.nameSelect.value;
-  if (!className || !studentId) return;
-  const student = state.roster.find((row) => row.id === studentId);
-  if (!student) return;
-  state.student = { className, ...student };
-  els.whoClass.textContent = className;
-  els.whoName.textContent = student.name;
-  buildNominationForm();
-  els.setup.classList.add('d-none');
-  els.form.classList.remove('d-none');
-  els.linkChange.addEventListener('click', (event) => {
-    event.preventDefault();
-    els.form.classList.add('d-none');
-    els.setup.classList.remove('d-none');
-  }, { once: true });
-}
-
-function buildNominationForm() {
-  if (!state.nominations.length) {
-    els.nominations.innerHTML = '<div class="alert alert-secondary">Nav pievienota neviena nominācija.</div>';
+function route() {
+  if (state.submitted) { show('done'); return; }      // already voted: never show the form
+  if (!state.votingOpen) { show('closed'); return; }
+  if (!state.classes.length || !state.nominations.length) {
+    show('closed');
+    showMessage('Balsošana vēl nav sagatavota (nav klašu vai nomināciju).', 'warning');
     return;
   }
+  els.classSelect.innerHTML = '<option value="">— izvēlies klasi —</option>' +
+    state.classes.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  els.btnStart.disabled = true;
+  show('setup');
+}
 
-  const classNames = state.roster.map((student) => ({ value: student.id, label: student.name }));
-  els.nominations.innerHTML = state.nominations.map((nomination) => {
-    const options = ['<option value="">— izvēlies —</option>']
-      .concat(classNames.map((student) => `<option value="${student.value}">${student.label}</option>`))
-      .join('');
+async function beginVoting() {
+  const className = els.classSelect.value;
+  if (!className) return;
+  els.btnStart.disabled = true;
+  try {
+    const data = await api(`/student/class?name=${encodeURIComponent(className)}`);
+    state.roster = data.students || [];
+    if (!state.roster.length) { showMessage(`Klasei ${className} nav saraksta. Sazinies ar organizatoriem.`, 'warning'); return; }
+    state.className = className;
+    els.whoClass.textContent = className;
+    clearMessage();
+    buildForm();
+    show('form');
+    window.scrollTo({ top: 0 });
+  } catch (error) {
+    showMessage(error.message, 'danger');
+  } finally {
+    els.btnStart.disabled = !els.classSelect.value;
+  }
+}
 
-    return `
-      <div class="choice-row ${classNames.length ? '' : 'is-empty'} mb-3">
-        <h3 class="h5 mb-1">${nomination.title}</h3>
-        ${nomination.description ? `<div class="nomination-desc mb-3">${nomination.description}</div>` : ''}
-        <div class="mb-2">
-          <label class="form-label">1. izvēle</label>
-          <select class="form-select choice-select" data-nomination-id="${nomination.id}" data-rank="1">
-            ${options}
-          </select>
-        </div>
-        <div class="mb-2">
-          <label class="form-label">2. izvēle</label>
-          <select class="form-select choice-select" data-nomination-id="${nomination.id}" data-rank="2">
-            ${options}
-          </select>
-        </div>
-        <div class="mb-2">
-          <label class="form-label">3. izvēle</label>
-          <select class="form-select choice-select" data-nomination-id="${nomination.id}" data-rank="3">
-            ${options}
-          </select>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  const selects = [...document.querySelectorAll('.choice-select')];
-  selects.forEach((select) => {
-    select.addEventListener('change', () => updateProgress());
-  });
+// ---------- form ----------
+function buildForm() {
+  els.nominations.innerHTML = state.nominations.map((n) => `
+    <div class="choice-row mb-4" data-nom="${esc(n.id)}">
+      <h3 class="h5 mb-1">${esc(n.title)}</h3>
+      ${n.description ? `<div class="nomination-desc mb-2">${esc(n.description)}</div>` : ''}
+      ${[1, 2, 3].map((rank) => `
+        <div class="pick mb-3">
+          <label class="form-label">${rank}. izvēle${rank === 1 ? '' : ' (nav obligāta)'}</label>
+          <select class="form-select pick-select"></select>
+          <textarea class="form-control mt-2 pick-reason d-none" rows="2" maxlength="1200"
+            placeholder="Kāpēc tu izvēlies šo cilvēku? (vismaz ${MIN_REASON} rakstzīmes)"></textarea>
+        </div>`).join('')}
+    </div>`).join('');
+  refreshSelects();
   updateProgress();
 }
 
-function updateProgress() {
-  const selects = [...document.querySelectorAll('.choice-select')];
-  let total = 0;
-  const byNomination = new Map();
-  for (const select of selects) {
-    const nominationId = select.dataset.nominationId;
-    const rank = Number(select.dataset.rank);
-    const value = select.value;
-    if (!byNomination.has(nominationId)) byNomination.set(nominationId, new Map());
-    const group = byNomination.get(nominationId);
-    if (value) { group.set(rank, value); total += 1; }
-  }
-
-  let valid = true;
-  for (const [nominationId, group] of byNomination.entries()) {
-    const chosenIds = [...group.values()];
-    if (new Set(chosenIds).size !== chosenIds.length) valid = false;
-    if (chosenIds.length > 0 && chosenIds.length < 3) {
-      valid = valid && [...Array(3).keys()].every((index) => group.has(index + 1) || !group.has(index + 1));
-    }
-  }
-
-  const totalNominationCount = state.nominations.length || 0;
-  els.progress.textContent = `${total} izvēles no ${totalNominationCount * 3} iespējami`; 
-  els.btnSubmit.disabled = !(total >= totalNominationCount);
-  if (!valid) {
-    els.progress.textContent += ' · pārbaudi dublikātus un secību';
-  }
-}
-
-async function submitBallot() {
-  const entries = [];
-  const nominationMap = new Map();
-  const selects = [...document.querySelectorAll('.choice-select')];
-  for (const select of selects) {
-    const value = select.value;
-    if (!value) continue;
-    const nominationId = select.dataset.nominationId;
-    const rank = Number(select.dataset.rank);
-    if (!nominationMap.has(nominationId)) nominationMap.set(nominationId, []);
-    nominationMap.get(nominationId).push({ nominationId, nomineeId: value, rank });
-  }
-
-  for (const nomination of state.nominations) {
-    const picks = nominationMap.get(nomination.id) || [];
-    if (!picks.length) {
-      showMessage('Katrā nominācijā jāizvēlas vismaz viens cilvēks.', 'warning');
-      return;
-    }
-    for (const pick of picks) {
-      const nominee = state.roster.find((person) => person.id === pick.nomineeId);
-      if (!nominee) {
-        showMessage('Kļūda nominācijā — izvēlētais students nav atrasts.', 'danger');
-        return;
-      }
-      entries.push({
-        nominationId: pick.nominationId,
-        nomineeId: pick.nomineeId,
-        rank: pick.rank,
-        explanation: 'Balsots pēc pieprasītā procesa',
-      });
-    }
-  }
-
-  try {
-    await api('/ballot/submit', {
-      method: 'POST',
-      body: {
-        studentId: state.student.id,
-        className: state.student.className,
-        studentName: state.student.name,
-        entries,
-      },
+// Each nomination: slot 2 opens after slot 1, slot 3 after slot 2; a person can be picked only once per nomination.
+function refreshSelects() {
+  document.querySelectorAll('.choice-row').forEach((block) => {
+    const picks = [...block.querySelectorAll('.pick')];
+    let prevFilled = true;
+    picks.forEach((p) => {                               // pass 1: clear slots that follow an empty one
+      const sel = p.querySelector('select');
+      if (!prevFilled) sel.value = '';
+      prevFilled = !!sel.value;
     });
-    state.submitted = true;
-    showDone();
-    sessionStorage.setItem(TOKEN_KEY, state.token);
-  } catch (error) {
-    showMessage(error.message || 'Balsojums netika pieņemts.', 'danger');
-  }
+    const chosen = picks.map((p) => p.querySelector('select').value);
+    prevFilled = true;
+    picks.forEach((p, i) => {                            // pass 2: rebuild options
+      const sel = p.querySelector('select');
+      const reason = p.querySelector('textarea');
+      const taken = new Set(chosen.filter((v, j) => v && j !== i));
+      const current = chosen[i];
+      sel.innerHTML = '<option value="">— izvēlies —</option>' +
+        state.roster.filter((s) => !taken.has(s.id)).map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+      sel.value = current;
+      sel.disabled = !prevFilled;
+      reason.classList.toggle('d-none', !sel.value);
+      if (!sel.value) reason.value = '';
+      prevFilled = !!sel.value;
+    });
+  });
 }
 
-async function startFromAuth() {
-  clearMessage();
-  const exchanged = await consumeAuthCode();
-  if (!state.token && !exchanged) return;
-  try {
-    const auth = await api('/auth/me');
-    if (!auth.user) {
-      setLoggedOut();
-      return;
-    }
-    state.user = auth.user.email || auth.user.user || null;
-    els.login.classList.add('d-none');
-    els.loading.classList.remove('d-none');
-    await loadStudentData();
-    els.loading.classList.add('d-none');
-    renderForm();
-  } catch (error) {
-    setLoggedOut(error.message || 'Kļūda ielādējot balsošanas lapu.');
-  }
+function collect() {
+  const entries = [];
+  let complete = 0;
+  let shortReason = false;
+  document.querySelectorAll('.choice-row').forEach((block) => {
+    let hasFirst = false;
+    let blockOk = true;
+    [...block.querySelectorAll('.pick')].forEach((p, i) => {
+      const nomineeId = p.querySelector('select').value;
+      if (!nomineeId) return;
+      const explanation = p.querySelector('textarea').value.trim();
+      if (explanation.length < MIN_REASON) { blockOk = false; shortReason = true; }
+      if (i === 0) hasFirst = true;
+      entries.push({ nominationId: block.dataset.nom, nomineeId, rank: i + 1, explanation });
+    });
+    if (hasFirst && blockOk) complete++;
+  });
+  return { entries, complete, total: state.nominations.length, shortReason };
 }
 
-els.classSelect.addEventListener('change', async () => {
-  const className = els.classSelect.value;
-  els.btnStart.disabled = !className;
-  if (!className) {
-    els.nameSelect.innerHTML = '<option value="">— izvēlies savu vārdu —</option>';
-    return;
-  }
-  await loadRosterForClass(className);
-});
+function updateProgress() {
+  const { complete, total, shortReason } = collect();
+  els.progress.textContent = `Pabeigtas nominācijas: ${complete} no ${total}` +
+    (shortReason ? ` · katram izvēlētajam jāraksta pamatojums (vismaz ${MIN_REASON} rakstzīmes)` : '');
+  els.btnSubmit.disabled = !(total > 0 && complete === total);
+}
 
-els.btnStart.addEventListener('click', beginVoting);
-els.btnSubmit.addEventListener('click', submitBallot);
-els.btnReload.addEventListener('click', () => window.location.reload());
-els.linkLogout.addEventListener('click', async (event) => {
+async function submitBallot(event) {
   event.preventDefault();
-  try { await api('/auth/logout', { method: 'POST', body: {} }); } catch (_) {}
+  const { entries, complete, total } = collect();
+  if (complete !== total) return;
+  if (!confirm('Iesniegt balsojumu? Pēc tam to vairs nevarēs mainīt.')) return;
+  els.btnSubmit.disabled = true;
+  try {
+    await api('/ballot/submit', { method: 'POST', body: { className: state.className, entries } });
+    state.submitted = true;
+    clearMessage();
+    show('done');
+    window.scrollTo({ top: 0 });
+  } catch (error) {
+    if (/jau ir iesniegts/.test(error.message)) { state.submitted = true; show('done'); return; }
+    showMessage(error.message || 'Balsojums netika pieņemts.', 'danger');
+    updateProgress();
+  }
+}
+
+// ---------- events ----------
+els.classSelect.addEventListener('change', () => { els.btnStart.disabled = !els.classSelect.value; });
+els.btnStart.addEventListener('click', beginVoting);
+els.nominations.addEventListener('change', (e) => { if (e.target.matches('.pick-select')) { refreshSelects(); updateProgress(); } });
+els.nominations.addEventListener('input', (e) => { if (e.target.matches('.pick-reason')) updateProgress(); });
+$('#view-form').addEventListener('submit', submitBallot);
+els.linkChange.addEventListener('click', (e) => { e.preventDefault(); clearMessage(); show('setup'); });
+els.btnReload.addEventListener('click', () => window.location.reload());
+els.linkLogout.addEventListener('click', async (e) => {
+  e.preventDefault();
+  try { await api('/auth/logout', { method: 'POST', body: {} }); } catch (_) { /* ignore */ }
   setLoggedOut();
 });
-
-window.addEventListener('DOMContentLoaded', startFromAuth);
+window.addEventListener('DOMContentLoaded', start);

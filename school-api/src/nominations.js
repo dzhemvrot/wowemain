@@ -1,6 +1,7 @@
 const SESSION_SECONDS = 12 * 60 * 60;
 const AUTH_CODE_SECONDS = 90;
 const MAX_BODY_BYTES = 1_000_000;
+const MIN_EXPLANATION = 10;
 const encoder = new TextEncoder();
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), {
   status,
@@ -239,19 +240,19 @@ async function dataView(db) {
   const [nominations, classes, entries, ballots, log, votingOpen, results] = await Promise.all([
     db.prepare("SELECT id, title, description FROM nominations ORDER BY created_at, title").all(),
     db.prepare(`SELECT s.class_name, COUNT(*) AS student_count,
-      (SELECT COUNT(*) FROM ballots b JOIN students v ON v.id = b.voter_student_id WHERE v.class_name = s.class_name) AS voted_count
+      (SELECT COUNT(*) FROM ballots b WHERE b.class_name = s.class_name) AS voted_count
       FROM students s GROUP BY s.class_name`).all(),
     db.prepare(`SELECT be.id, be.nomination_id AS nominationId, n.title AS nominationTitle,
       nominee.name AS nominee, nominee.id AS nomineeId, nominee.class_name AS className,
-      voter.name AS voter, b.voter_email AS voterEmail, be.rank, be.explanation AS reason, be.status
+      b.voter_email AS voter, be.rank, be.explanation AS reason, be.status
       FROM ballot_entries be JOIN nominations n ON n.id = be.nomination_id
       JOIN students nominee ON nominee.id = be.nominee_student_id
-      JOIN ballots b ON b.id = be.ballot_id JOIN students voter ON voter.id = b.voter_student_id
+      JOIN ballots b ON b.id = be.ballot_id
       ORDER BY nominee.class_name, n.title, b.submitted_at DESC, be.rank`).all(),
     db.prepare(`SELECT b.id, b.submitted_at AS submittedAt, b.voter_email AS voterEmail,
-      v.name AS voter, v.class_name AS className,
+      b.class_name AS className,
       (SELECT COUNT(*) FROM ballot_entries e WHERE e.ballot_id = b.id) AS entryCount
-      FROM ballots b JOIN students v ON v.id = b.voter_student_id ORDER BY b.submitted_at DESC`).all(),
+      FROM ballots b ORDER BY b.submitted_at DESC`).all(),
     db.prepare("SELECT created_at AS ts, actor_email AS actor, action, details FROM audit_log ORDER BY created_at DESC LIMIT 1000").all(),
     getVotingOpen(db), resultsView(db),
   ]);
@@ -289,19 +290,22 @@ async function importRoster(db, body, user) {
 async function deleteClass(db, user, body) {
   const className = cleanName(body.className, 24);
   if (!className) return fail("Class is required.");
-  const result = await db.prepare("DELETE FROM students WHERE class_name = ?").bind(className).run();
-  if (!result.meta.changes) return fail("Class not found.", 404);
-  await audit(db, user, "class_delete", null, `${className} (${result.meta.changes} skolēni; saistītie balsojumi dzēsti)`);
-  return json({ ok: true, deleted: result.meta.changes });
+  // Ballots are tied to a class by name, so they are removed together with the class.
+  const [, students] = await db.batch([
+    db.prepare("DELETE FROM ballots WHERE class_name = ?").bind(className),
+    db.prepare("DELETE FROM students WHERE class_name = ?").bind(className),
+  ]);
+  if (!students.meta.changes) return fail("Class not found.", 404);
+  await audit(db, user, "class_delete", null, `${className} (${students.meta.changes} skolēni; šīs klases balsojumi dzēsti)`);
+  return json({ ok: true, deleted: students.meta.changes });
 }
 async function deleteBallot(db, user, body) {
   const id = clean(body.id, 80);
-  const ballot = await db.prepare(`SELECT b.voter_email, v.name, v.class_name FROM ballots b
-    JOIN students v ON v.id = b.voter_student_id WHERE b.id = ?`).bind(id).first();
+  const ballot = await db.prepare("SELECT voter_email, class_name FROM ballots WHERE id = ?").bind(id).first();
   if (!ballot) return fail("Ballot not found.", 404);
   await db.batch([
     db.prepare("DELETE FROM ballots WHERE id = ?").bind(id),
-    auditStmt(db, user.email, "ballot_delete", id, `${ballot.class_name} · ${ballot.name} · ${ballot.voter_email}`),
+    auditStmt(db, user.email, "ballot_delete", id, `${ballot.class_name} · ${ballot.voter_email}`),
   ]);
   return json({ ok: true });
 }
@@ -334,31 +338,27 @@ async function classList(db, className) {
   return json({ ok: true, students: rows.results.sort((a, b) => a.name.localeCompare(b.name, "lv")) });
 }
 
+// 1 school email = 1 ballot. The voter only says which class they vote in and who they nominate.
 async function submitBallot(db, user, body) {
   if (!(await getVotingOpen(db))) return fail("Balsošana pašlaik ir slēgta.", 403);
 
-  // Only a name from the imported class list is accepted. No new students are created here.
-  const studentId = clean(body.studentId, 80);
-  const voter = studentId
-    ? await db.prepare("SELECT id, name, class_name FROM students WHERE id = ?").bind(studentId).first()
-    : null;
-  if (!voter) return fail("Izvēlies savu klasi un vārdu sarakstā.");
+  const existing = await db.prepare("SELECT id FROM ballots WHERE voter_email = ?").bind(user.email).first();
+  if (existing) return fail("No šī konta balsojums jau ir iesniegts.", 409);
+
+  const classInput = cleanName(body.className, 24);
+  const classmates = classInput
+    ? await db.prepare("SELECT id, name, class_name FROM students WHERE class_name = ?").bind(classInput).all()
+    : { results: [] };
+  if (!classmates.results.length) return fail("Izvēlies savu klasi.");
+  const className = classmates.results[0].class_name;
+  const names = new Map(classmates.results.map((s) => [s.id, s.name]));
 
   if (!Array.isArray(body.entries) || body.entries.length === 0 || body.entries.length > 300) {
     return fail("Balsojums ir tukšs.");
   }
-
-  const existing = await db.prepare("SELECT id FROM ballots WHERE voter_email = ? OR voter_student_id = ?")
-    .bind(user.email, voter.id).first();
-  if (existing) return fail("No šī konta vai šim vārdam balsojums jau ir iesniegts.", 409);
-
-  const [nominations, classmates] = await Promise.all([
-    db.prepare("SELECT id, title FROM nominations ORDER BY created_at").all(),
-    db.prepare("SELECT id, name FROM students WHERE class_name = ?").bind(voter.class_name).all(),
-  ]);
+  const nominations = await db.prepare("SELECT id, title FROM nominations ORDER BY created_at").all();
   const titles = new Map(nominations.results.map((n) => [n.id, n.title]));
   if (!titles.size) return fail("Nav nomināciju, par kurām balsot.", 403);
-  const names = new Map(classmates.results.map((s) => [s.id, s.name]));
 
   const groups = new Map();
   for (const entry of body.entries) {
@@ -367,10 +367,10 @@ async function submitBallot(db, user, body) {
     const explanation = String(entry?.explanation ?? "").trim();
     const rank = Number(entry?.rank);
     if (
-      !titles.has(nominationId) || !names.has(nomineeId) || nomineeId === voter.id ||
-      ![1, 2, 3].includes(rank) || explanation.length < 1 || explanation.length > 1200
+      !titles.has(nominationId) || !names.has(nomineeId) || ![1, 2, 3].includes(rank) ||
+      explanation.length < MIN_EXPLANATION || explanation.length > 1200
     ) {
-      return fail("Kāds balsojuma ieraksts nav derīgs: izvēlies klasesbiedrus (ne sevi) un uzraksti pamatojumu katram.");
+      return fail(`Kāds balsojuma ieraksts nav derīgs: izvēlies cilvēkus no savas klases un katram uzraksti pamatojumu (vismaz ${MIN_EXPLANATION} rakstzīmes).`);
     }
     if (!groups.has(nominationId)) groups.set(nominationId, []);
     groups.get(nominationId).push({ nominationId, nomineeId, explanation, rank });
@@ -386,21 +386,21 @@ async function submitBallot(db, user, body) {
   }
 
   const ballotId = uid();
-  const batch = [db.prepare("INSERT INTO ballots (id, voter_email, voter_student_id) VALUES (?, ?, ?)").bind(ballotId, user.email, voter.id)];
+  const batch = [db.prepare("INSERT INTO ballots (id, voter_email, class_name) VALUES (?, ?, ?)").bind(ballotId, user.email, className)];
   for (const entries of groups.values()) {
     for (const e of entries.sort((a, b) => a.rank - b.rank)) {
       batch.push(db.prepare(`INSERT INTO ballot_entries (id, ballot_id, nomination_id, nominee_student_id, rank, explanation)
         VALUES (?, ?, ?, ?, ?, ?)`)
         .bind(uid(), ballotId, e.nominationId, e.nomineeId, e.rank, e.explanation));
       batch.push(auditStmt(db, user.email, "vote_entry", ballotId,
-        `${voter.class_name} · ${voter.name} → ${names.get(e.nomineeId)} · ${titles.get(e.nominationId)} · ${e.rank}. izvēle`));
+        `${className} → ${names.get(e.nomineeId)} · ${titles.get(e.nominationId)} · ${e.rank}. izvēle`));
     }
   }
-  batch.push(auditStmt(db, user.email, "ballot_submit", ballotId, `${voter.class_name} · ${voter.name}`));
+  batch.push(auditStmt(db, user.email, "ballot_submit", ballotId, className));
   try {
     await db.batch(batch);
   } catch (error) {
-    if (String(error.message).includes("UNIQUE")) return fail("No šī konta vai šim vārdam balsojums jau ir iesniegts.", 409);
+    if (String(error.message).includes("UNIQUE")) return fail("No šī konta balsojums jau ir iesniegts.", 409);
     throw error;
   }
   return json({ ok: true, submitted: true });
