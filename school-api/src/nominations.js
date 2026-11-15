@@ -190,7 +190,7 @@ async function microsoftCallback(request, env) {
   await env.nominations_db.prepare("INSERT INTO nominations_auth_codes (code_hash, email, role, expires_at) VALUES (?, ?, ?, ?)")
     .bind(await sha256(authCode), email, role, Math.floor(Date.now() / 1000) + AUTH_CODE_SECONDS).run();
   const frontend = new URL(env.FRONTEND_ORIGIN || "https://wowe-main.eu");
-  frontend.pathname = `${frontend.pathname.replace(/\/$/, "")}/nominations/`;
+  frontend.pathname = `${frontend.pathname.replace(/\/$/, "")}/nominations/${role === "organizer" ? "" : "vote.html"}`;
   frontend.searchParams.set("auth_code", authCode);
   return Response.redirect(frontend.toString(), 302);
 }
@@ -337,26 +337,19 @@ async function classList(db, className) {
 async function submitBallot(db, user, body) {
   if (!(await getVotingOpen(db))) return fail("Balsošana pašlaik ir slēgta.", 403);
 
-  const candidateStudent = body.studentId ? await db.prepare("SELECT id, name, class_name FROM students WHERE id = ?").bind(clean(body.studentId, 80)).first() : null;
-  const chosenName = cleanName(body.studentName, 160);
-  const chosenClass = cleanName(body.className, 24);
-  let voter = candidateStudent;
-
-  if (!voter && chosenName && chosenClass) {
-    voter = await db.prepare("SELECT id, name, class_name FROM students WHERE name = ? AND class_name = ?").bind(chosenName, chosenClass).first();
-  }
-
-  if (!voter && chosenName && chosenClass) {
-    const id = uid();
-    await db.prepare("INSERT INTO students (id, name, class_name) VALUES (?, ?, ?)").bind(id, chosenName, chosenClass).run();
-    voter = { id, name: chosenName, class_name: chosenClass };
-  }
-
+  // Only a name from the imported class list is accepted. No new students are created here.
+  const studentId = clean(body.studentId, 80);
+  const voter = studentId
+    ? await db.prepare("SELECT id, name, class_name FROM students WHERE id = ?").bind(studentId).first()
+    : null;
   if (!voter) return fail("Izvēlies savu klasi un vārdu sarakstā.");
 
-  if (!Array.isArray(body.entries) || body.entries.length === 0 || body.entries.length > 300) return fail("Balsojums ir tukšs.");
+  if (!Array.isArray(body.entries) || body.entries.length === 0 || body.entries.length > 300) {
+    return fail("Balsojums ir tukšs.");
+  }
 
-  const existing = await db.prepare("SELECT id FROM ballots WHERE voter_email = ? OR voter_student_id = ?").bind(user.email, voter.id).first();
+  const existing = await db.prepare("SELECT id FROM ballots WHERE voter_email = ? OR voter_student_id = ?")
+    .bind(user.email, voter.id).first();
   if (existing) return fail("No šī konta vai šim vārdam balsojums jau ir iesniegts.", 409);
 
   const [nominations, classmates] = await Promise.all([
@@ -371,9 +364,12 @@ async function submitBallot(db, user, body) {
   for (const entry of body.entries) {
     const nominationId = clean(entry?.nominationId, 80);
     const nomineeId = clean(entry?.nomineeId, 80);
-    const explanation = clean(entry?.explanation, 1200);
+    const explanation = String(entry?.explanation ?? "").trim();
     const rank = Number(entry?.rank);
-    if (!titles.has(nominationId) || !names.has(nomineeId) || nomineeId === voter.id || ![1, 2, 3].includes(rank) || !explanation) {
+    if (
+      !titles.has(nominationId) || !names.has(nomineeId) || nomineeId === voter.id ||
+      ![1, 2, 3].includes(rank) || explanation.length < 1 || explanation.length > 1200
+    ) {
       return fail("Kāds balsojuma ieraksts nav derīgs: izvēlies klasesbiedrus (ne sevi) un uzraksti pamatojumu katram.");
     }
     if (!groups.has(nominationId)) groups.set(nominationId, []);
@@ -391,16 +387,19 @@ async function submitBallot(db, user, body) {
 
   const ballotId = uid();
   const batch = [db.prepare("INSERT INTO ballots (id, voter_email, voter_student_id) VALUES (?, ?, ?)").bind(ballotId, user.email, voter.id)];
-  for (const entries of groups.values()) for (const e of entries.sort((a, b) => a.rank - b.rank)) {
-    batch.push(db.prepare(`INSERT INTO ballot_entries (id, ballot_id, nomination_id, nominee_student_id, rank, explanation)
-      VALUES (?, ?, ?, ?, ?, ?)`)
-      .bind(uid(), ballotId, e.nominationId, e.nomineeId, e.rank, e.explanation));
-    batch.push(auditStmt(db, user.email, "vote_entry", ballotId,
-      `${voter.class_name} · ${voter.name} → ${names.get(e.nomineeId)} · ${titles.get(e.nominationId)} · ${e.rank}. izvēle`));
+  for (const entries of groups.values()) {
+    for (const e of entries.sort((a, b) => a.rank - b.rank)) {
+      batch.push(db.prepare(`INSERT INTO ballot_entries (id, ballot_id, nomination_id, nominee_student_id, rank, explanation)
+        VALUES (?, ?, ?, ?, ?, ?)`)
+        .bind(uid(), ballotId, e.nominationId, e.nomineeId, e.rank, e.explanation));
+      batch.push(auditStmt(db, user.email, "vote_entry", ballotId,
+        `${voter.class_name} · ${voter.name} → ${names.get(e.nomineeId)} · ${titles.get(e.nominationId)} · ${e.rank}. izvēle`));
+    }
   }
   batch.push(auditStmt(db, user.email, "ballot_submit", ballotId, `${voter.class_name} · ${voter.name}`));
-  try { await db.batch(batch); }
-  catch (error) {
+  try {
+    await db.batch(batch);
+  } catch (error) {
     if (String(error.message).includes("UNIQUE")) return fail("No šī konta vai šim vārdam balsojums jau ir iesniegts.", 409);
     throw error;
   }
